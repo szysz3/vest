@@ -30,6 +30,8 @@ playground.xcworkspace
 # .swiftpm
 
 .build/
+.swiftpm/
+Package.resolved
 
 # CocoaPods
 #
@@ -60,3 +62,12 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# App configuration (contains API keys)
+Config.plist
+
+# Claude Code local settings
+.claude/
+
+# Generated Xcode project (regenerate with: xcodegen generate)
+*.xcodeproj
