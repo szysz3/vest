@@ -3,11 +3,20 @@ import Core
 
 struct PortfolioScreen: View {
     @StateObject var viewModel: PortfolioViewModel
+    @State private var isAddSheetPresented = false
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task { await viewModel.loadIfNeeded() }
+            .task {
+                await viewModel.loadIfNeeded()
+                await viewModel.loadFormOptionsIfNeeded()
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    addTransactionToolbarButton
+                }
+            }
     }
 
     @ViewBuilder
@@ -17,11 +26,55 @@ struct PortfolioScreen: View {
             ProgressView()
         case .loaded(let state):
             PortfolioContent(state: state)
+                .sheet(isPresented: $isAddSheetPresented) {
+                    AddTransactionSheet(
+                        options: viewModel.formOptions,
+                        onSave: { draft in
+                            try await viewModel.addTransaction(
+                                amount: draft.amount,
+                                action: draft.action,
+                                assetType: draft.assetType,
+                                operatorName: draft.operatorName
+                            )
+                        }
+                    )
+                }
         case .failed(let error):
             Text(error.localizedDescription)
                 .foregroundStyle(.secondary)
         }
     }
+
+    private func presentAddTransaction() {
+        if viewModel.formOptions.isEmpty {
+            Task {
+                await viewModel.loadFormOptionsIfNeeded()
+                await MainActor.run {
+                    if !viewModel.formOptions.isEmpty {
+                        isAddSheetPresented = true
+                    }
+                }
+            }
+        } else {
+            isAddSheetPresented = true
+        }
+    }
+
+    private var addTransactionToolbarButton: some View {
+        let mint = Color(red: 0.37, green: 0.86, blue: 0.74)
+        return Button(action: presentAddTransaction) {
+            Image(systemName: "plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(mint)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(mint.opacity(0.18))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
 }
 
 private struct PortfolioContent: View {

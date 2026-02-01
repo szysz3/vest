@@ -62,6 +62,10 @@ private struct TransactionRow: View {
             return Color(red: 0.37, green: 0.86, blue: 0.74)
         case .sold:
             return Color(red: 1.00, green: 0.62, blue: 0.43)
+        case .cashDeposit:
+            return Color(red: 0.37, green: 0.86, blue: 0.74)
+        case .cashWithdrawal:
+            return Color(red: 1.00, green: 0.62, blue: 0.43)
         }
     }
 

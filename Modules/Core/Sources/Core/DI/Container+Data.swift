@@ -10,3 +10,9 @@ import Factory
 //               .singleton
 //       }
 //   }
+public extension Container {
+    var transactionRepository: Factory<TransactionRepository> {
+        self { TransactionRepositoryImpl() }
+            .singleton
+    }
+}

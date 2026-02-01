@@ -1,11 +1,15 @@
 import Foundation
 import Core
+import Domain
 
 @MainActor
 public final class HistoryViewModel: ObservableObject {
     @Published private(set) var state: ViewState<HistoryState, ViewModelError> = .idle
+    private let getTransactionsUseCase: GetTransactionsUseCaseProtocol
 
-    public nonisolated init() {}
+    public nonisolated init(getTransactionsUseCase: GetTransactionsUseCaseProtocol) {
+        self.getTransactionsUseCase = getTransactionsUseCase
+    }
 
     func loadIfNeeded() async {
         guard state.isIdle else { return }
@@ -14,7 +18,13 @@ public final class HistoryViewModel: ObservableObject {
 
     func load() async {
         state = .loading
-        state = .loaded(HistoryState.demo())
+        do {
+            let transactions = try await getTransactionsUseCase.execute()
+            let mapped = transactions.map(HistoryState.Transaction.init)
+            state = .loaded(HistoryState(transactions: mapped))
+        } catch {
+            state = .failed(ViewModelError(from: error))
+        }
     }
 }
 
@@ -53,11 +63,25 @@ public extension HistoryState {
             self.place = place
             self.date = date
         }
+
+        public init(_ transaction: Domain.Transaction) {
+            self.init(
+                id: transaction.id,
+                amount: transaction.amount,
+                name: transaction.name,
+                action: Action(rawValue: transaction.action.rawValue) ?? .bought,
+                assetType: AssetType(rawValue: transaction.assetType.rawValue) ?? .stock,
+                place: transaction.place,
+                date: transaction.date
+            )
+        }
     }
 
     enum Action: String, CaseIterable, Sendable {
         case bought
         case sold
+        case cashDeposit
+        case cashWithdrawal
 
         var title: String {
             switch self {
@@ -65,6 +89,10 @@ public extension HistoryState {
                 return "Bought"
             case .sold:
                 return "Sold"
+            case .cashDeposit:
+                return "Cash Deposit"
+            case .cashWithdrawal:
+                return "Cash Withdrawal"
             }
         }
 
@@ -125,39 +153,5 @@ public extension HistoryState {
         case violet
         case ocean
         case sand
-    }
-}
-
-public extension HistoryState {
-    static func demo() -> HistoryState {
-        let calendar = Calendar.current
-        let transactions: [Transaction] = [
-            Transaction(
-                amount: 2000,
-                name: "US Treasury 10Y",
-                action: .bought,
-                assetType: .bond,
-                place: "Broker A",
-                date: calendar.date(from: DateComponents(year: 2026, month: 1, day: 28)) ?? .now
-            ),
-            Transaction(
-                amount: 1500,
-                name: "Tesla",
-                action: .sold,
-                assetType: .stock,
-                place: "Exchange",
-                date: calendar.date(from: DateComponents(year: 2026, month: 1, day: 23)) ?? .now
-            ),
-            Transaction(
-                amount: 800,
-                name: "Bitcoin",
-                action: .bought,
-                assetType: .crypto,
-                place: "Exchange",
-                date: calendar.date(from: DateComponents(year: 2026, month: 1, day: 10)) ?? .now
-            )
-        ]
-
-        return HistoryState(transactions: transactions)
     }
 }
