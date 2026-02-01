@@ -65,6 +65,10 @@ fastlane/test_output
 
 # App configuration (contains API keys)
 Config.plist
+Config.json
+App/Resources/Config.json
+vest_mobile/Config.json
+vest_mobile/App/Resources/Config.json
 
 # Claude Code local settings
 .claude/
