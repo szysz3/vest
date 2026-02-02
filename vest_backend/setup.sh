@@ -63,7 +63,7 @@ chmod +x "${DEPLOY_DIR}/backup.sh"
 
 # ── 4. Verify SSH connectivity to backup host ────────────────────────────────
 log "Checking SSH connectivity to ${REMOTE_USER}@${REMOTE_HOST}..."
-if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 "${REMOTE_USER}@${REMOTE_HOST}" "echo ok" &>/dev/null; then
+if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 "${REMOTE_USER}@${REMOTE_HOST}" "echo ok" &>/dev/null; then
     log "SSH connection to backup host verified."
 else
     warn "Cannot connect to ${REMOTE_USER}@${REMOTE_HOST} via SSH."
