@@ -17,6 +17,8 @@ let package = Package(
             .product(name: "Core", package: "Core"),
             .product(name: "Domain", package: "Domain"),
             .product(name: "Factory", package: "Factory")
+        ], resources: [
+            .process("Resources")
         ]),
         .testTarget(name: "PresentationTests", dependencies: [
             "Presentation",

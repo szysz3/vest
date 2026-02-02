@@ -51,9 +51,11 @@ public struct LockScreen: View {
 
     private var appBranding: some View {
         VStack(spacing: 16) {
-            Image(systemName: "chart.pie.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.white)
+            Image("VestIcon", bundle: .module)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 120, height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
 
             Text("vest")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
