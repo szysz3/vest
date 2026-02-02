@@ -7,6 +7,7 @@ struct HistoryScreen: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
             .task { await viewModel.loadIfNeeded() }
     }
 
@@ -15,11 +16,14 @@ struct HistoryScreen: View {
         switch viewModel.state {
         case .idle, .loading:
             ProgressView()
+                .transition(.opacity)
         case .loaded(let state):
             HistoryContent(state: state)
+                .transition(.opacity.combined(with: .offset(y: 12)))
         case .failed(let error):
             Text(error.localizedDescription)
                 .foregroundStyle(.secondary)
+                .transition(.opacity)
         }
     }
 }
@@ -61,8 +65,8 @@ private struct HistoryContent: View {
 
     private var transactionsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ForEach(state.transactions) { transaction in
-                TransactionRow(transaction: transaction)
+            ForEach(Array(state.transactions.enumerated()), id: \.element.id) { index, transaction in
+                TransactionRow(transaction: transaction, animationDelay: Double(index) * 0.05)
             }
         }
     }
@@ -70,6 +74,8 @@ private struct HistoryContent: View {
 
 private struct TransactionRow: View {
     let transaction: HistoryState.Transaction
+    var animationDelay: Double = 0
+    @State private var appeared = false
 
     private var accentColor: Color {
         transaction.assetType.tone.color
@@ -129,6 +135,13 @@ private struct TransactionRow: View {
         }
         .padding(14)
         .background(VestCardBackground(cornerRadius: 18, fillOpacity: 0.04, strokeOpacity: 0.06))
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 16)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4).delay(animationDelay)) {
+                appeared = true
+            }
+        }
     }
 
     private var assetTypePill: some View {

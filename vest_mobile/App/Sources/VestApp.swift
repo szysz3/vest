@@ -8,11 +8,16 @@ struct VestApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if lockViewModel.isUnlocked {
-                NavigationTabContainer()
-            } else {
-                LockScreen(viewModel: lockViewModel)
+            ZStack {
+                if lockViewModel.isUnlocked {
+                    NavigationTabContainer()
+                        .transition(.opacity.combined(with: .scale(scale: 1.02)))
+                } else {
+                    LockScreen(viewModel: lockViewModel)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.5), value: lockViewModel.isUnlocked)
         }
     }
 }

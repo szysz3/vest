@@ -8,6 +8,7 @@ struct PortfolioScreen: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
             .task {
                 await viewModel.loadIfNeeded()
                 await viewModel.loadFormOptionsIfNeeded()
@@ -24,8 +25,10 @@ struct PortfolioScreen: View {
         switch viewModel.state {
         case .idle, .loading:
             ProgressView()
+                .transition(.opacity)
         case .loaded(let state):
             PortfolioContent(state: state)
+                .transition(.opacity.combined(with: .offset(y: 12)))
                 .sheet(isPresented: $isAddSheetPresented) {
                     AddTransactionSheet(
                         options: viewModel.formOptions,
@@ -42,6 +45,7 @@ struct PortfolioScreen: View {
         case .failed(let error):
             Text(error.localizedDescription)
                 .foregroundStyle(.secondary)
+                .transition(.opacity)
         }
     }
 
@@ -71,13 +75,22 @@ struct PortfolioScreen: View {
                         .fill(VestActionColor.positive.opacity(0.18))
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleToolbarButtonStyle())
     }
 
 }
 
+private struct ScaleToolbarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
 private struct PortfolioContent: View {
     let state: PortfolioState
+    @State private var appeared = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -86,7 +99,12 @@ private struct PortfolioContent: View {
             } else {
                 VStack(alignment: .leading, spacing: 24) {
                     chartCard
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 20)
+
                     assetsSection
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 20)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -95,6 +113,11 @@ private struct PortfolioContent: View {
         }
         .background(VestGradientBackground())
         .environment(\.colorScheme, .dark)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                appeared = true
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -127,10 +150,11 @@ private struct PortfolioContent: View {
             Text("Holdings")
                 .font(.title3.weight(.semibold))
 
-            ForEach(state.assets) { asset in
+            ForEach(Array(state.assets.enumerated()), id: \.element.id) { index, asset in
                 AssetRow(
                     asset: asset,
-                    totalAmount: state.totalAmount
+                    totalAmount: state.totalAmount,
+                    animationDelay: Double(index) * 0.06
                 )
             }
         }
@@ -143,6 +167,7 @@ private struct PortfolioContent: View {
 private struct PortfolioPieChart: View {
     let assets: [PortfolioState.Asset]
     let totalAmount: Double
+    @State private var chartProgress: Double = 0
 
     var body: some View {
         ZStack {
@@ -152,7 +177,7 @@ private struct PortfolioPieChart: View {
 
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 Circle()
-                    .trim(from: segment.start, to: segment.end)
+                    .trim(from: segment.start * chartProgress, to: segment.end * chartProgress)
                     .stroke(
                         segment.color,
                         style: StrokeStyle(lineWidth: 34, lineCap: .round)
@@ -162,8 +187,14 @@ private struct PortfolioPieChart: View {
             .rotationEffect(.degrees(-90))
 
             formattedAmount
+                .opacity(chartProgress)
         }
         .padding(10)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
+                chartProgress = 1
+            }
+        }
     }
 
     private var formattedAmount: some View {
@@ -204,6 +235,8 @@ private struct PortfolioPieChart: View {
 private struct AssetRow: View {
     let asset: PortfolioState.Asset
     let totalAmount: Double
+    var animationDelay: Double = 0
+    @State private var appeared = false
 
     private var percent: Double {
         guard totalAmount > 0 else { return 0 }
@@ -236,7 +269,14 @@ private struct AssetRow: View {
                     .foregroundStyle(.primary)
             }
 
-            AllocationBar(value: percent, color: asset.color.color)
+            AllocationBar(value: appeared ? percent : 0, color: asset.color.color)
+        }
+        .opacity(appeared ? 1 : 0)
+        .offset(x: appeared ? 0 : -12)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.45).delay(0.3 + animationDelay)) {
+                appeared = true
+            }
         }
     }
 }
@@ -247,13 +287,14 @@ private struct AllocationBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let width = max(proxy.size.width * value, 8)
+            let width = max(proxy.size.width * value, value > 0 ? 8 : 0)
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(Color.white.opacity(0.08))
                 Capsule()
                     .fill(color)
                     .frame(width: width)
+                    .animation(.easeOut(duration: 0.6), value: width)
             }
         }
         .frame(height: 8)

@@ -2,6 +2,8 @@ import SwiftUI
 
 public struct LockScreen: View {
     @StateObject var viewModel: LockViewModel
+    @State private var logoAppeared = false
+    @State private var buttonAppeared = false
 
     public init(viewModel: LockViewModel) {
         self._viewModel = StateObject(wrappedValue: viewModel)
@@ -15,14 +17,19 @@ public struct LockScreen: View {
                 Spacer()
 
                 appBranding
+                    .opacity(logoAppeared ? 1 : 0)
+                    .scaleEffect(logoAppeared ? 1 : 0.8)
 
                 Spacer()
 
                 if let error = viewModel.error {
                     errorView(message: error)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
                 unlockButton
+                    .opacity(buttonAppeared ? 1 : 0)
+                    .offset(y: buttonAppeared ? 0 : 24)
 
                 Spacer()
                     .frame(height: 60)
@@ -30,7 +37,14 @@ public struct LockScreen: View {
             .padding(.horizontal, 40)
         }
         .environment(\.colorScheme, .dark)
+        .animation(.easeOut(duration: 0.35), value: viewModel.error != nil)
         .task {
+            withAnimation(.easeOut(duration: 0.7)) {
+                logoAppeared = true
+            }
+            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+                buttonAppeared = true
+            }
             await viewModel.authenticate()
         }
     }
@@ -76,6 +90,14 @@ public struct LockScreen: View {
                     )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
+    }
+}
+
+private struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
