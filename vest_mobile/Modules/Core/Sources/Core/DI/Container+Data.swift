@@ -15,4 +15,9 @@ public extension Container {
         self { TransactionRepositoryImpl(httpClient: HTTPClient()) }
             .singleton
     }
+
+    var biometricRepository: Factory<BiometricRepository> {
+        self { BiometricRepositoryImpl() }
+            .singleton
+    }
 }

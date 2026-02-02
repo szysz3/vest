@@ -16,4 +16,8 @@ public extension Container {
     var historyViewModel: Factory<HistoryViewModel> {
         self { HistoryViewModel(getTransactionsUseCase: self.getTransactionsUseCase()) }
     }
+
+    var lockViewModel: Factory<LockViewModel> {
+        self { LockViewModel(authenticateWithBiometricsUseCase: self.authenticateWithBiometricsUseCase()) }
+    }
 }

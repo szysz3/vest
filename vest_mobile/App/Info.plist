@@ -4,5 +4,7 @@
 <dict>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>vest uses Face ID to protect your portfolio data.</string>
 </dict>
 </plist>
