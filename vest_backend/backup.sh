@@ -6,7 +6,7 @@ REMOTE_HOST="192.168.0.10"
 REMOTE_PATH="/srv/backups/vest"
 REMOTE_USER="${BACKUP_REMOTE_USER:-backup-user}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new"
-CONTAINER_NAME="vest_backend-api-1"
+CONTAINER_NAME="${BACKUP_CONTAINER_NAME:-vest-deploy-api-1}"
 DB_CONTAINER_PATH="/app/data/vest.db"
 RETENTION_DAYS=14
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"

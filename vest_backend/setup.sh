@@ -6,7 +6,8 @@ set -euo pipefail
 # Run as root or with sudo.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_DIR="/opt/vest"
+SUDO_USER_HOME="$(getent passwd "${SUDO_USER:-root}" | cut -d: -f6)"
+DEPLOY_DIR="${SUDO_USER_HOME}/vest-deploy"
 BACKUP_CRON_SCHEDULE="30 1 * * *"       # 1:30 AM every day
 REMOTE_HOST="192.168.0.10"
 REMOTE_USER="${BACKUP_REMOTE_USER:-backup-user}"
@@ -61,34 +62,43 @@ cp "${SCRIPT_DIR}/.dockerignore"      "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/backup.sh"          "${DEPLOY_DIR}/"
 chmod +x "${DEPLOY_DIR}/backup.sh"
 
+log "Verifying deployment files..."
+for f in app.py requirements.txt Dockerfile docker-compose.yml .dockerignore backup.sh; do
+    [[ -f "${DEPLOY_DIR}/${f}" ]] || err "Missing ${DEPLOY_DIR}/${f} — copy failed."
+done
+log "All files deployed to ${DEPLOY_DIR}:"
+ls -la "${DEPLOY_DIR}/"
+
 # ── 4. Verify SSH connectivity to backup host ────────────────────────────────
-log "Checking SSH connectivity to ${REMOTE_USER}@${REMOTE_HOST}..."
-if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 "${REMOTE_USER}@${REMOTE_HOST}" "echo ok" &>/dev/null; then
+# When running under sudo, use the invoking user's SSH key
+log "Checking SSH connectivity to ${REMOTE_USER}@${REMOTE_HOST} (using ${SUDO_USER_HOME}/.ssh)..."
+if sudo -u "${SUDO_USER:-root}" ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 "${REMOTE_USER}@${REMOTE_HOST}" "echo ok" &>/dev/null; then
     log "SSH connection to backup host verified."
 else
     warn "Cannot connect to ${REMOTE_USER}@${REMOTE_HOST} via SSH."
-    warn "Make sure your default key (~/.ssh/id_*) is authorized on the remote host."
+    warn "Make sure your key (${SUDO_USER_HOME}/.ssh/id_*) is authorized on the remote host."
 fi
 
 # ── 5. Build & start containers ─────────────────────────────────────────────
 log "Building and starting containers..."
-cd "${DEPLOY_DIR}"
-docker compose up --build -d
+docker compose -f "${DEPLOY_DIR}/docker-compose.yml" --project-directory "${DEPLOY_DIR}" up --build -d
 
 log "Waiting for API to become healthy..."
 for i in $(seq 1 15); do
-    if curl -sf http://localhost:8000/transactions/form-options >/dev/null 2>&1; then
+    if curl -sf http://localhost:8002/transactions/form-options >/dev/null 2>&1; then
         log "API is up and responding."
         break
     fi
     if [[ $i -eq 15 ]]; then
-        warn "API did not respond after 15 seconds. Check logs with: docker compose -f ${DEPLOY_DIR}/docker-compose.yml logs"
+        warn "API did not respond after 15 seconds. Check logs with: docker compose --project-directory ${DEPLOY_DIR} logs"
     fi
     sleep 1
 done
 
 # ── 6. Configure cron job for backups ────────────────────────────────────────
-CRON_CMD="BACKUP_REMOTE_USER=${REMOTE_USER} ${DEPLOY_DIR}/backup.sh >> /var/log/vest_backup.log 2>&1"
+# Run backup as the invoking user so their ~/.ssh key is used
+CRON_USER="${SUDO_USER:-root}"
+CRON_CMD="sudo -u ${CRON_USER} BACKUP_REMOTE_USER=${REMOTE_USER} ${DEPLOY_DIR}/backup.sh >> /var/log/vest_backup.log 2>&1"
 
 # Add cron entry only if it doesn't already exist
 if crontab -l 2>/dev/null | grep -qF "${DEPLOY_DIR}/backup.sh"; then
@@ -112,9 +122,9 @@ LOGROTATE
 # ── Done ─────────────────────────────────────────────────────────────────────
 log "Setup complete!"
 echo ""
-echo "  Application:  http://<this-host>:8000"
-echo "  API docs:     http://<this-host>:8000/docs"
-echo "  Logs:         docker compose -f ${DEPLOY_DIR}/docker-compose.yml logs -f"
+echo "  Application:  http://<this-host>:8002"
+echo "  API docs:     http://<this-host>:8002/docs"
+echo "  Logs:         docker compose --project-directory ${DEPLOY_DIR} logs -f"
 echo "  Backup log:   /var/log/vest_backup.log"
 echo "  Backup cron:  ${BACKUP_CRON_SCHEDULE} (daily at 01:30)"
 echo ""
