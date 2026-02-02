@@ -161,11 +161,24 @@ private struct PortfolioPieChart: View {
             }
             .rotationEffect(.degrees(-90))
 
-            Text(totalAmount.formatted(.currency(code: "USD")))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
+            formattedAmount
         }
         .padding(10)
+    }
+
+    private var formattedAmount: some View {
+        let whole = Int(totalAmount)
+        let fraction = totalAmount - Double(whole)
+        let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
+
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("\(whole)")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text(",\(fractionText) PLN")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+        }
     }
 
     private var segments: [ChartSegment] {
@@ -211,7 +224,7 @@ private struct AssetRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(asset.name)
                         .font(.headline)
-                    Text(asset.amount.formatted(.currency(code: "USD")))
+                    Text(asset.amount.formatted(.currency(code: "PLN")))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

@@ -199,7 +199,7 @@ private enum AssetDisplay {
     var color: VestTone {
         switch self {
         case .bond:
-            return .sand
+            return .rose
         case .etf:
             return .ocean
         case .stock:
@@ -207,9 +207,9 @@ private enum AssetDisplay {
         case .crypto:
             return .violet
         case .gold:
-            return .sunset
+            return .amber
         case .cash:
-            return .mint
+            return .sage
         }
     }
 

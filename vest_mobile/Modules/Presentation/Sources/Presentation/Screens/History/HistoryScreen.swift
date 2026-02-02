@@ -105,7 +105,7 @@ private struct TransactionRow: View {
                         .font(.headline)
                         .foregroundStyle(actionColor)
                     Spacer()
-                    Text(transaction.amount.formatted(.currency(code: "USD")))
+                    Text(transaction.amount.formatted(.currency(code: "PLN")))
                         .font(.headline.weight(.semibold))
                 }
 

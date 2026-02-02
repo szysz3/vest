@@ -55,6 +55,10 @@ struct AddTransactionSheet: View {
             .padding(.top, 20)
             .padding(.bottom, 6)
         }
+        .scrollDismissesKeyboard(.immediately)
+        .onTapGesture {
+            amountFocused = false
+        }
         .background(sheetBackground)
         .environment(\.colorScheme, .dark)
         .presentationDetents([.fraction(0.9)])
@@ -115,7 +119,7 @@ struct AddTransactionSheet: View {
     private var amountSection: some View {
         SectionCard(title: "Amount") {
             HStack(spacing: 12) {
-                Text("$")
+                Text("PLN")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.secondary)
                 TextField("0.00", text: $amountText)
@@ -404,12 +408,12 @@ private extension AssetType {
 
     private var vestTone: VestTone {
         switch self {
-        case .bond: return .sand
+        case .bond: return .rose
         case .etf: return .ocean
         case .stock: return .electric
         case .crypto: return .violet
-        case .gold: return .sunset
-        case .cash: return .mint
+        case .gold: return .amber
+        case .cash: return .sage
         }
     }
 

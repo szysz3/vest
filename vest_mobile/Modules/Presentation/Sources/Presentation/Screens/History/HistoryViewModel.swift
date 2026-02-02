@@ -131,7 +131,7 @@ public extension HistoryState {
         var tone: VestTone {
             switch self {
             case .bond:
-                return .sand
+                return .rose
             case .etf:
                 return .ocean
             case .stock:
@@ -139,9 +139,9 @@ public extension HistoryState {
             case .crypto:
                 return .violet
             case .gold:
-                return .sunset
+                return .amber
             case .cash:
-                return .mint
+                return .sage
             }
         }
     }

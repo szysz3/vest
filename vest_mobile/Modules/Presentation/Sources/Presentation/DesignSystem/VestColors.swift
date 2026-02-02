@@ -1,32 +1,42 @@
 import SwiftUI
 
 public enum VestTone: String, Sendable {
-    case electric
+    /// Positive action (buy, deposit)
     case mint
+    /// Negative action (sell, withdrawal)
     case sunset
-    case violet
-    case ocean
-    case sand
+
+    // Asset types – evenly spaced hues, consistent saturation & lightness
+    case electric   // stocks  – cornflower blue  ~225°
+    case ocean      // ETF     – soft cyan        ~195°
+    case violet     // crypto  – lavender         ~275°
+    case amber      // gold    – warm gold        ~45°
+    case rose       // bonds   – dusty pink       ~335°
+    case sage       // cash    – yellow-green     ~90°
 
     public var color: Color {
         switch self {
-        case .electric:
-            return Color(red: 0.44, green: 0.70, blue: 1.00)
         case .mint:
-            return Color(red: 0.37, green: 0.86, blue: 0.74)
+            return Color(red: 0.40, green: 0.78, blue: 0.68)
         case .sunset:
-            return Color(red: 1.00, green: 0.62, blue: 0.43)
-        case .violet:
-            return Color(red: 0.70, green: 0.56, blue: 1.00)
+            return Color(red: 0.90, green: 0.55, blue: 0.48)
+        case .electric:
+            return Color(red: 0.47, green: 0.63, blue: 0.90)
         case .ocean:
-            return Color(red: 0.33, green: 0.61, blue: 0.94)
-        case .sand:
-            return Color(red: 0.95, green: 0.83, blue: 0.58)
+            return Color(red: 0.42, green: 0.72, blue: 0.82)
+        case .violet:
+            return Color(red: 0.66, green: 0.55, blue: 0.87)
+        case .amber:
+            return Color(red: 0.85, green: 0.72, blue: 0.42)
+        case .rose:
+            return Color(red: 0.84, green: 0.56, blue: 0.62)
+        case .sage:
+            return Color(red: 0.62, green: 0.78, blue: 0.48)
         }
     }
 }
 
 enum VestActionColor {
-    static let positive = Color(red: 0.37, green: 0.86, blue: 0.74)
-    static let negative = Color(red: 1.00, green: 0.62, blue: 0.43)
+    static let positive = Color(red: 0.40, green: 0.78, blue: 0.68)
+    static let negative = Color(red: 0.90, green: 0.55, blue: 0.48)
 }
