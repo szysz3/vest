@@ -75,3 +75,7 @@ vest_mobile/App/Resources/Config.json
 
 # Generated Xcode project (regenerate with: xcodegen generate)
 *.xcodeproj
+
+# Env files
+.env
+vest_backend/.env

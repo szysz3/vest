@@ -2,6 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update -qq && apt-get install -y -qq sqlite3 && rm -rf /var/lib/apt/lists/*
+
 RUN python -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
