@@ -20,6 +20,14 @@ public struct TransactionRepositoryImpl: TransactionRepository {
         )
     }
 
+    public func addTransactions(_ transactions: [Transaction]) async throws {
+        try await httpClient.requestVoid(
+            path: "/transactions/batch",
+            method: .POST,
+            parameters: transactions
+        )
+    }
+
     public func fetchTransactionFormOptions() async throws -> TransactionFormOptions {
         try await httpClient.request(path: "/transactions/form-options")
     }

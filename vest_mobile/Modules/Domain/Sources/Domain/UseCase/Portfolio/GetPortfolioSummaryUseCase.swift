@@ -32,7 +32,7 @@ public struct GetPortfolioSummaryUseCase: GetPortfolioSummaryUseCaseProtocol {
         switch transaction.action {
         case .bought, .cashDeposit:
             return transaction.amount
-        case .sold, .cashWithdrawal:
+        case .sold, .cashWithdrawal, .positionClosed:
             return -transaction.amount
         }
     }

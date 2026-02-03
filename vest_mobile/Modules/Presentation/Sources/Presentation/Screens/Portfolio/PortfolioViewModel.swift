@@ -50,20 +50,46 @@ public final class PortfolioViewModel: ObservableObject {
         amount: Double,
         action: TransactionAction,
         assetType: AssetType,
-        operatorName: String
+        operatorName: String,
+        details: String = "",
+        profitOrLoss: Double? = nil
     ) async throws {
         if action.isCashAction && assetType != .cash {
             throw AddTransactionValidationError.cashActionRequiresCashAsset
         }
+        if action == .bought && assetType != .cash {
+            let summary = try await getPortfolioSummaryUseCase.execute()
+            let cashBalance = summary.assets.first(where: { $0.assetType == .cash })?.amount ?? 0
+            guard cashBalance >= amount else {
+                throw AddTransactionValidationError.insufficientCash(available: cashBalance, required: amount)
+            }
+        }
+        let name = details.isEmpty
+            ? AssetDisplay.from(assetType: assetType).transactionName
+            : details
         let transaction = Transaction(
             amount: amount,
-            name: AssetDisplay.from(assetType: assetType).transactionName,
+            name: name,
             action: action,
             assetType: assetType,
             place: operatorName,
-            date: .now
+            date: .now,
+            details: details,
+            profitOrLoss: profitOrLoss
         )
-        try await addTransactionUseCase.execute(transaction: transaction)
+        if action == .bought && assetType != .cash {
+            let cashWithdrawal = Transaction(
+                amount: amount,
+                name: "Cash",
+                action: .cashWithdrawal,
+                assetType: .cash,
+                place: operatorName,
+                date: .now
+            )
+            try await addTransactionUseCase.execute(transactions: [transaction, cashWithdrawal])
+        } else {
+            try await addTransactionUseCase.execute(transaction: transaction)
+        }
         await load()
         await onTransactionAdded?()
     }
@@ -71,11 +97,16 @@ public final class PortfolioViewModel: ObservableObject {
 
 private enum AddTransactionValidationError: LocalizedError {
     case cashActionRequiresCashAsset
+    case insufficientCash(available: Double, required: Double)
 
     var errorDescription: String? {
         switch self {
         case .cashActionRequiresCashAsset:
             return "Cash deposits and withdrawals are only available for cash assets."
+        case .insufficientCash(let available, let required):
+            let availableFormatted = available.formatted(.currency(code: "PLN"))
+            let requiredFormatted = required.formatted(.currency(code: "PLN"))
+            return "Insufficient cash balance. Available: \(availableFormatted), required: \(requiredFormatted). Deposit cash first."
         }
     }
 }
@@ -85,7 +116,7 @@ private extension TransactionAction {
         switch self {
         case .cashDeposit, .cashWithdrawal:
             return true
-        case .bought, .sold:
+        case .bought, .sold, .positionClosed:
             return false
         }
     }

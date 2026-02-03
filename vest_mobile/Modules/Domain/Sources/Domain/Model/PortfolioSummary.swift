@@ -21,3 +21,17 @@ public struct PortfolioAsset: Identifiable, Equatable, Sendable {
         self.amount = amount
     }
 }
+
+public struct AssetDetail: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let assetType: AssetType
+    public let details: String
+    public let totalAmount: Double
+
+    public init(assetType: AssetType, details: String, totalAmount: Double) {
+        self.id = "\(assetType.rawValue)_\(details)"
+        self.assetType = assetType
+        self.details = details
+        self.totalAmount = totalAmount
+    }
+}

@@ -37,7 +37,8 @@ struct PortfolioScreen: View {
                                 amount: draft.amount,
                                 action: draft.action,
                                 assetType: draft.assetType,
-                                operatorName: draft.operatorName
+                                operatorName: draft.operatorName,
+                                details: draft.details
                             )
                         }
                     )

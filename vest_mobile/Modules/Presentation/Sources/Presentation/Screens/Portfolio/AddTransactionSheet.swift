@@ -6,6 +6,7 @@ struct AddTransactionDraft: Sendable {
     let action: TransactionAction
     let assetType: AssetType
     let operatorName: String
+    let details: String
 }
 
 struct AddTransactionSheet: View {
@@ -14,8 +15,10 @@ struct AddTransactionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var amountFocused: Bool
+    @FocusState private var detailsFocused: Bool
 
     @State private var amountText = ""
+    @State private var detailsText = ""
     @State private var selectedAssetType: AssetType
     @State private var selectedAction: TransactionActionOption
     @State private var selectedOperator: TransactionOperator
@@ -35,6 +38,10 @@ struct AddTransactionSheet: View {
         _selectedAction = State(initialValue: defaultAssetType == .cash ? .cashDeposit : .buy)
     }
 
+    private var isCash: Bool {
+        selectedAssetType == .cash
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
@@ -45,8 +52,13 @@ struct AddTransactionSheet: View {
                 } else {
                     header
                     amountSection
-                    actionSection
+                    if isCash {
+                        actionSection
+                    }
                     assetSection
+                    if !isCash {
+                        detailsSection
+                    }
                     operatorSection
                     saveButton
                 }
@@ -58,6 +70,7 @@ struct AddTransactionSheet: View {
         .scrollDismissesKeyboard(.immediately)
         .onTapGesture {
             amountFocused = false
+            detailsFocused = false
         }
         .background(sheetBackground)
         .environment(\.colorScheme, .dark)
@@ -81,9 +94,13 @@ struct AddTransactionSheet: View {
             }
         }
         .onChange(of: selectedAssetType) { newValue in
-            let actions = availableActions(for: newValue)
-            if !actions.contains(selectedAction) {
-                selectedAction = actions.first ?? .buy
+            if newValue == .cash {
+                let actions = availableActions(for: newValue)
+                if !actions.contains(selectedAction) {
+                    selectedAction = actions.first ?? .cashDeposit
+                }
+            } else {
+                selectedAction = .buy
             }
         }
     }
@@ -94,7 +111,7 @@ struct AddTransactionSheet: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Add Transaction")
                         .font(.title3.weight(.semibold))
-                    Text("Record a buy, sell, or cash movement.")
+                    Text(isCash ? "Record a cash deposit or withdrawal." : "Record a new purchase.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -163,6 +180,17 @@ struct AddTransactionSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    private var detailsSection: some View {
+        SectionCard(title: "Symbol") {
+            TextField("e.g. VWCE.DE, ROR0127", text: $detailsText)
+                .textInputAutocapitalization(.characters)
+                .focused($detailsFocused)
+                .font(.title3.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
         }
     }
 
@@ -248,14 +276,20 @@ struct AddTransactionSheet: View {
 
     private var isFormValid: Bool {
         guard let amount = parsedAmount, amount > 0 else { return false }
-        return availableActions(for: selectedAssetType).contains(selectedAction)
+        if !isCash && detailsText.trimmingCharacters(in: .whitespaces).isEmpty {
+            return false
+        }
+        if isCash {
+            return availableActions(for: selectedAssetType).contains(selectedAction)
+        }
+        return true
     }
 
     private func availableActions(for assetType: AssetType) -> [TransactionActionOption] {
         if assetType == .cash {
             return [.cashDeposit, .cashWithdrawal]
         }
-        return [.buy, .sell]
+        return [.buy]
     }
 
     private func saveTransaction() async {
@@ -263,12 +297,14 @@ struct AddTransactionSheet: View {
         isSaving = true
         defer { isSaving = false }
         do {
+            let action: TransactionAction = isCash ? selectedAction.action : .bought
             try await onSave(
                 AddTransactionDraft(
                     amount: amount,
-                    action: selectedAction.action,
+                    action: action,
                     assetType: selectedAssetType,
-                    operatorName: selectedOperator.name
+                    operatorName: selectedOperator.name,
+                    details: isCash ? "" : detailsText.trimmingCharacters(in: .whitespaces)
                 )
             )
             dismiss()
@@ -280,7 +316,6 @@ struct AddTransactionSheet: View {
 
 private enum TransactionActionOption: String, CaseIterable, Hashable {
     case buy
-    case sell
     case cashDeposit
     case cashWithdrawal
 
@@ -288,8 +323,6 @@ private enum TransactionActionOption: String, CaseIterable, Hashable {
         switch self {
         case .buy:
             return "Buy"
-        case .sell:
-            return "Sell"
         case .cashDeposit:
             return "Cash Deposit"
         case .cashWithdrawal:
@@ -301,8 +334,6 @@ private enum TransactionActionOption: String, CaseIterable, Hashable {
         switch self {
         case .buy:
             return .bought
-        case .sell:
-            return .sold
         case .cashDeposit:
             return .cashDeposit
         case .cashWithdrawal:
@@ -314,7 +345,7 @@ private enum TransactionActionOption: String, CaseIterable, Hashable {
         switch self {
         case .buy, .cashDeposit:
             return VestActionColor.positive
-        case .sell, .cashWithdrawal:
+        case .cashWithdrawal:
             return VestActionColor.negative
         }
     }
@@ -323,8 +354,6 @@ private enum TransactionActionOption: String, CaseIterable, Hashable {
         switch self {
         case .buy:
             return "arrow.up.right"
-        case .sell:
-            return "arrow.down.left"
         case .cashDeposit:
             return "arrow.down.circle.fill"
         case .cashWithdrawal:

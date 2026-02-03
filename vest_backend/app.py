@@ -24,6 +24,7 @@ class TransactionAction(str, Enum):
     sold = "sold"
     cashDeposit = "cashDeposit"
     cashWithdrawal = "cashWithdrawal"
+    positionClosed = "positionClosed"
 
 
 class AssetType(str, Enum):
@@ -43,6 +44,8 @@ class Transaction(BaseModel):
     assetType: AssetType
     place: str
     date: datetime
+    details: str = ""
+    profitOrLoss: float | None = None
 
 
 class Operator(BaseModel):
@@ -53,6 +56,12 @@ class Operator(BaseModel):
 class TransactionFormOptions(BaseModel):
     assetTypes: list[str]
     operators: list[Operator]
+
+
+class AssetDetailResponse(BaseModel):
+    assetType: str
+    details: str
+    totalAmount: float
 
 
 @contextmanager
@@ -84,6 +93,13 @@ def init_db():
                 name TEXT NOT NULL
             )
         """)
+        # Migrate: add details column if missing
+        cursor = conn.execute("PRAGMA table_info(transactions)")
+        columns = [row["name"] for row in cursor.fetchall()]
+        if "details" not in columns:
+            conn.execute("ALTER TABLE transactions ADD COLUMN details TEXT NOT NULL DEFAULT ''")
+        if "profit_or_loss" not in columns:
+            conn.execute("ALTER TABLE transactions ADD COLUMN profit_or_loss REAL")
         # Seed operators if empty
         cursor = conn.execute("SELECT COUNT(*) FROM operators")
         if cursor.fetchone()[0] == 0:
@@ -117,6 +133,8 @@ async def get_transactions():
             assetType=row["asset_type"],
             place=row["place"],
             date=row["date"],
+            details=row["details"],
+            profitOrLoss=row["profit_or_loss"],
         )
         for row in rows
     ]
@@ -127,7 +145,7 @@ async def add_transaction(transaction: Transaction):
     with get_db() as conn:
         try:
             conn.execute(
-                "INSERT INTO transactions (id, amount, name, action, asset_type, place, date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     transaction.id,
                     transaction.amount,
@@ -136,12 +154,39 @@ async def add_transaction(transaction: Transaction):
                     transaction.assetType.value,
                     transaction.place,
                     transaction.date.isoformat(),
+                    transaction.details,
+                    transaction.profitOrLoss,
                 ),
             )
             conn.commit()
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=409, detail="Transaction already exists")
     return transaction
+
+
+@app.post("/transactions/batch", response_model=list[Transaction], status_code=201)
+async def add_transactions_batch(transactions: list[Transaction]):
+    with get_db() as conn:
+        try:
+            for transaction in transactions:
+                conn.execute(
+                    "INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        transaction.id,
+                        transaction.amount,
+                        transaction.name,
+                        transaction.action.value,
+                        transaction.assetType.value,
+                        transaction.place,
+                        transaction.date.isoformat(),
+                        transaction.details,
+                        transaction.profitOrLoss,
+                    ),
+                )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="One or more transactions already exist")
+    return transactions
 
 
 @app.get("/transactions/form-options", response_model=TransactionFormOptions)
@@ -152,6 +197,38 @@ async def get_form_options():
         assetTypes=ASSET_TYPES,
         operators=[Operator(id=row["id"], name=row["name"]) for row in rows],
     )
+
+
+@app.get("/portfolio/details", response_model=list[AssetDetailResponse])
+async def get_portfolio_details():
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC").fetchall()
+
+    holdings: dict[tuple[str, str], float] = {}
+    for row in rows:
+        asset_type = row["asset_type"]
+        details = row["details"]
+        if not details:
+            continue
+        key = (asset_type, details)
+        action = row["action"]
+        amount = row["amount"]
+        if action in ("bought", "cashDeposit"):
+            holdings[key] = holdings.get(key, 0) + amount
+        elif action in ("sold", "cashWithdrawal", "positionClosed"):
+            holdings[key] = holdings.get(key, 0) - amount
+
+    result = []
+    for (asset_type, details), total in holdings.items():
+        if total > 0:
+            result.append(AssetDetailResponse(
+                assetType=asset_type,
+                details=details,
+                totalAmount=total,
+            ))
+
+    result.sort(key=lambda x: (x.assetType, x.details))
+    return result
 
 
 if __name__ == "__main__":

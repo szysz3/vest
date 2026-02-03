@@ -85,7 +85,7 @@ private struct TransactionRow: View {
         switch transaction.action {
         case .bought, .cashDeposit:
             return VestActionColor.positive
-        case .sold, .cashWithdrawal:
+        case .sold, .cashWithdrawal, .positionClosed:
             return VestActionColor.negative
         }
     }
@@ -117,6 +117,26 @@ private struct TransactionRow: View {
 
                 Text(transaction.name)
                     .font(.subheadline.weight(.semibold))
+
+                if transaction.action == .positionClosed, let pl = transaction.profitOrLoss {
+                    HStack(spacing: 6) {
+                        let isProfit = pl >= 0
+                        let plColor = isProfit ? VestActionColor.positive : VestActionColor.negative
+                        let sign = isProfit ? "+" : ""
+                        Image(systemName: isProfit ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(plColor)
+                        Text("\(sign)\(pl.formatted(.currency(code: "PLN")))")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(plColor)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill((pl >= 0 ? VestActionColor.positive : VestActionColor.negative).opacity(0.15))
+                    )
+                }
 
                 HStack(spacing: 8) {
                     assetTypePill

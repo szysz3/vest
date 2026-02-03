@@ -8,6 +8,8 @@ public struct Transaction: Identifiable, Equatable, Sendable, Codable {
     public let assetType: AssetType
     public let place: String
     public let date: Date
+    public let details: String
+    public let profitOrLoss: Double?
 
     public init(
         id: UUID = UUID(),
@@ -16,7 +18,9 @@ public struct Transaction: Identifiable, Equatable, Sendable, Codable {
         action: TransactionAction,
         assetType: AssetType,
         place: String,
-        date: Date
+        date: Date,
+        details: String = "",
+        profitOrLoss: Double? = nil
     ) {
         self.id = id
         self.amount = amount
@@ -25,6 +29,8 @@ public struct Transaction: Identifiable, Equatable, Sendable, Codable {
         self.assetType = assetType
         self.place = place
         self.date = date
+        self.details = details
+        self.profitOrLoss = profitOrLoss
     }
 }
 
@@ -33,6 +39,7 @@ public enum TransactionAction: String, CaseIterable, Sendable, Codable {
     case sold
     case cashDeposit
     case cashWithdrawal
+    case positionClosed
 }
 
 public enum AssetType: String, CaseIterable, Sendable, Codable {

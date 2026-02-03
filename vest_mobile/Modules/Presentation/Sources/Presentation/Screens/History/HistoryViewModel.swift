@@ -45,6 +45,7 @@ public extension HistoryState {
         public let assetType: AssetType
         public let place: String
         public let date: Date
+        public let profitOrLoss: Double?
 
         public init(
             id: UUID = UUID(),
@@ -53,7 +54,8 @@ public extension HistoryState {
             action: Action,
             assetType: AssetType,
             place: String,
-            date: Date
+            date: Date,
+            profitOrLoss: Double? = nil
         ) {
             self.id = id
             self.amount = amount
@@ -62,6 +64,7 @@ public extension HistoryState {
             self.assetType = assetType
             self.place = place
             self.date = date
+            self.profitOrLoss = profitOrLoss
         }
 
         public init(_ transaction: Domain.Transaction) {
@@ -72,7 +75,8 @@ public extension HistoryState {
                 action: Action(rawValue: transaction.action.rawValue) ?? .bought,
                 assetType: AssetType(rawValue: transaction.assetType.rawValue) ?? .stock,
                 place: transaction.place,
-                date: transaction.date
+                date: transaction.date,
+                profitOrLoss: transaction.profitOrLoss
             )
         }
     }
@@ -82,6 +86,7 @@ public extension HistoryState {
         case sold
         case cashDeposit
         case cashWithdrawal
+        case positionClosed
 
         var title: String {
             switch self {
@@ -93,6 +98,8 @@ public extension HistoryState {
                 return "Cash Deposit"
             case .cashWithdrawal:
                 return "Cash Withdrawal"
+            case .positionClosed:
+                return "Position Closed"
             }
         }
 
