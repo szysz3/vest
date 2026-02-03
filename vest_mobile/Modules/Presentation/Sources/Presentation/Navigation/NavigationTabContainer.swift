@@ -21,6 +21,8 @@ public struct NavigationTabContainer: View {
             NavigationStack {
                 PortfolioScreen(viewModel: portfolioViewModel)
                     .navigationTitle(Tab.portfolio.title)
+                    .preferredColorScheme(.dark)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
             }
             .tabItem { Label(Tab.portfolio.title, systemImage: Tab.portfolio.icon) }
             .tag(Tab.portfolio)
@@ -28,10 +30,13 @@ public struct NavigationTabContainer: View {
             NavigationStack {
                 HistoryScreen(viewModel: historyViewModel)
                     .navigationTitle(Tab.history.title)
+                    .preferredColorScheme(.dark)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
             }
             .tabItem { Label(Tab.history.title, systemImage: Tab.history.icon) }
             .tag(Tab.history)
         }
+        .toolbarColorScheme(.dark, for: .tabBar)
     }
 }
 
