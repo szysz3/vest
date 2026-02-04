@@ -81,11 +81,12 @@ private struct DetailsContent: View {
                                 animationDelay: Double(sectionIndex) * 0.1 + Double(index) * 0.05
                             )
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
+                                Button {
                                     onSell(item)
                                 } label: {
                                     Label("Sell", systemImage: "arrow.down.left")
                                 }
+                                .tint(.red)
                             }
                             .listRowBackground(Color.white.opacity(0.04))
                             .listRowSeparatorTint(Color.white.opacity(0.06))
@@ -107,6 +108,7 @@ private struct DetailsContent: View {
             .scrollContentBackground(.hidden)
             .background(VestGradientBackground())
             .environment(\.colorScheme, .dark)
+            .animation(.easeOut(duration: 0.35), value: state)
         }
     }
 
@@ -170,27 +172,42 @@ private struct SellConfirmationSheet: View {
     @FocusState private var amountFocused: Bool
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 16) {
-                header
-                amountSection
-                operatorSection
-                closePositionSection
-                if state.closePosition, let pl = state.profitOrLoss {
-                    profitLossSection(pl)
+        ZStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 16) {
+                    header
+                    amountSection
+                    operatorSection
+                    closePositionSection
+                    confirmButton
                 }
-                confirmButton
+                .animation(.easeOut(duration: 0.3), value: state.closePosition)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 6)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 6)
+            .scrollDismissesKeyboard(.immediately)
+            .onTapGesture { amountFocused = false }
+            .opacity(state.isConfirmed ? 0 : 1)
+
+            if state.isConfirmed {
+                VStack(spacing: 14) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 52))
+                        .foregroundStyle(VestActionColor.positive)
+                        .symbolRenderingMode(.hierarchical)
+                    Text("Sale Confirmed")
+                        .font(.title3.weight(.semibold))
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
         }
-        .scrollDismissesKeyboard(.immediately)
-        .onTapGesture { amountFocused = false }
+        .animation(.easeOut(duration: 0.3), value: state.isConfirmed)
         .background(sheetBackground)
         .environment(\.colorScheme, .dark)
         .presentationDetents([.fraction(0.7)])
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(state.isSaving || state.isConfirmed)
     }
 
     private var header: some View {
@@ -276,40 +293,48 @@ private struct SellConfirmationSheet: View {
 
     private var closePositionSection: some View {
         SellSectionCard(title: "Options") {
-            Toggle(isOn: Binding(
-                get: { state.closePosition },
-                set: { onClosePositionChanged($0) }
-            )) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Close Position")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Fully liquidate and record profit/loss")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                Toggle(isOn: Binding(
+                    get: { state.closePosition },
+                    set: { onClosePositionChanged($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Close Position")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Fully liquidate and record profit/loss")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(VestActionColor.negative)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                if state.closePosition, let pl = state.profitOrLoss {
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+                        .padding(.horizontal, 14)
+
+                    HStack {
+                        let isProfit = pl >= 0
+                        let color = isProfit ? VestActionColor.positive : VestActionColor.negative
+                        let sign = isProfit ? "+" : ""
+                        Text("P/L")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: isProfit ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(color)
+                        Text("\(sign)\(pl.formatted(.currency(code: "PLN")))")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(color)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .transition(.opacity.combined(with: .offset(y: -8)))
                 }
             }
-            .tint(VestActionColor.negative)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-        }
-    }
-
-    private func profitLossSection(_ pl: Double) -> some View {
-        SellSectionCard(title: "Profit / Loss") {
-            HStack {
-                let isProfit = pl >= 0
-                let color = isProfit ? VestActionColor.positive : VestActionColor.negative
-                let sign = isProfit ? "+" : ""
-                Text("\(sign)\(pl.formatted(.currency(code: "PLN")))")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(color)
-                Spacer()
-                Image(systemName: isProfit ? "arrow.up.right" : "arrow.down.right")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(color)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
         }
     }
 

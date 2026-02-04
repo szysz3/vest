@@ -57,6 +57,31 @@ public final class DetailsViewModel: ObservableObject {
         }
     }
 
+    private func reloadDetails() async {
+        do {
+            let details = try await getPortfolioDetailsUseCase.execute()
+            let grouped = Dictionary(grouping: details, by: { $0.assetType })
+            let sections = grouped
+                .map { assetType, assets in
+                    DetailsState.Section(
+                        assetType: assetType,
+                        items: assets.map { detail in
+                            DetailsState.Item(
+                                id: detail.id,
+                                details: detail.details,
+                                assetType: detail.assetType,
+                                totalAmount: detail.totalAmount
+                            )
+                        }.sorted { $0.details < $1.details }
+                    )
+                }
+                .sorted { $0.assetType.rawValue < $1.assetType.rawValue }
+            state = .loaded(DetailsState(sections: sections))
+        } catch {
+            // Keep current state on error rather than showing failure
+        }
+    }
+
     func requestSell(item: DetailsState.Item) {
         sellSheet = SellSheetState(
             details: item.details,
@@ -104,8 +129,12 @@ public final class DetailsViewModel: ObservableObject {
 
         do {
             try await addTransactionUseCase.execute(transactions: [transaction, cashTransaction])
+            sheet.isSaving = false
+            sheet.isConfirmed = true
+            sellSheet = sheet
+            try? await Task.sleep(for: .milliseconds(800))
             sellSheet = nil
-            await load()
+            await reloadDetails()
             await onTransactionAdded?()
         } catch {
             sheet.isSaving = false
@@ -140,6 +169,7 @@ struct SellSheetState: Equatable {
     var selectedOperator: TransactionOperator
     let availableOperators: [TransactionOperator]
     var isSaving: Bool = false
+    var isConfirmed: Bool = false
 
     var parsedSellAmount: Double? {
         let normalized = sellAmountText.replacingOccurrences(of: ",", with: ".")

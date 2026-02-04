@@ -43,9 +43,11 @@ private struct HistoryContent: View {
                     filtersSection
                     if viewModel.viewMode == .filtered {
                         filteredSummarySection
+                            .transition(.opacity.combined(with: .offset(y: 8)))
                     }
                     if viewModel.displayTransactions.isEmpty {
                         filteredEmptyState
+                            .transition(.opacity.combined(with: .offset(y: 8)))
                     } else {
                         transactionsSection(viewModel.displayTransactions)
                     }
@@ -53,6 +55,8 @@ private struct HistoryContent: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 36)
+                .animation(.easeOut(duration: 0.3), value: viewModel.viewMode)
+                .animation(.easeOut(duration: 0.3), value: viewModel.filters)
             }
         }
         .background(VestGradientBackground())
@@ -132,6 +136,7 @@ private struct HistoryContent: View {
                     datePickerRow(title: "From", selection: $viewModel.filters.startDate)
                     datePickerRow(title: "To", selection: $viewModel.filters.endDate)
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(16)
