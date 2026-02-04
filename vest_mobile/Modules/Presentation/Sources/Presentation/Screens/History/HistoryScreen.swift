@@ -8,7 +8,10 @@ struct HistoryScreen: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
-            .task { await viewModel.loadIfNeeded() }
+            .task {
+                viewModel.bind()
+                await viewModel.loadIfNeeded()
+            }
     }
 
     @ViewBuilder
@@ -17,8 +20,8 @@ struct HistoryScreen: View {
         case .idle, .loading:
             ProgressView()
                 .transition(.opacity)
-        case .loaded(let state):
-            HistoryContent(state: state)
+        case .loaded:
+            HistoryContent(viewModel: viewModel)
                 .transition(.opacity.combined(with: .offset(y: 12)))
         case .failed(let error):
             Text(error.localizedDescription)
@@ -29,15 +32,23 @@ struct HistoryScreen: View {
 }
 
 private struct HistoryContent: View {
-    let state: HistoryState
+    @ObservedObject var viewModel: HistoryViewModel
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            if state.transactions.isEmpty {
+            if viewModel.displayTransactions.isEmpty && viewModel.viewMode == .all {
                 emptyState
             } else {
                 VStack(alignment: .leading, spacing: 20) {
-                    transactionsSection
+                    filtersSection
+                    if viewModel.viewMode == .filtered {
+                        filteredSummarySection
+                    }
+                    if viewModel.displayTransactions.isEmpty {
+                        filteredEmptyState
+                    } else {
+                        transactionsSection(viewModel.displayTransactions)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -63,12 +74,129 @@ private struct HistoryContent: View {
         .padding(.top, 120)
     }
 
-    private var transactionsSection: some View {
+    private func transactionsSection(_ transactions: [HistoryState.Transaction]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            ForEach(Array(state.transactions.enumerated()), id: \.element.id) { index, transaction in
+            ForEach(Array(transactions.enumerated()), id: \.element.id) { index, transaction in
                 TransactionRow(transaction: transaction, animationDelay: Double(index) * 0.05)
             }
         }
+    }
+
+    private var filtersSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("History Filters")
+                    .font(.headline)
+                Spacer()
+                Button("Reset") {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        viewModel.resetFilters()
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+            }
+
+            Picker("View", selection: $viewModel.viewMode) {
+                ForEach(HistoryViewMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Toggle(isOn: $viewModel.filters.closedOnly) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Closed positions only")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Show only position closed entries")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(VestActionColor.negative)
+
+            Toggle(isOn: $viewModel.filters.dateRangeEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Filter by date range")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Limit results to a specific period")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(VestActionColor.positive)
+
+            if viewModel.filters.dateRangeEnabled {
+                VStack(spacing: 10) {
+                    datePickerRow(title: "From", selection: $viewModel.filters.startDate)
+                    datePickerRow(title: "To", selection: $viewModel.filters.endDate)
+                }
+            }
+        }
+        .padding(16)
+        .background(VestCardBackground(cornerRadius: 18, fillOpacity: 0.06, strokeOpacity: 0.08))
+    }
+
+    private func datePickerRow(title: String, selection: Binding<Date>) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            DatePicker(
+                "",
+                selection: selection,
+                in: viewModel.availableDateRange,
+                displayedComponents: .date
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+        }
+    }
+
+    private var filteredSummarySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Filtered Summary")
+                .font(.headline)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(viewModel.filteredResult.transactions.count) entries")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Matching filters")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Net P/L")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(viewModel.filteredResult.profitLossText)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(filteredProfitLossColor)
+                }
+            }
+        }
+        .padding(16)
+        .background(VestCardBackground(cornerRadius: 18, fillOpacity: 0.06, strokeOpacity: 0.08))
+    }
+
+    private var filteredProfitLossColor: Color {
+        viewModel.filteredResult.profitLoss >= 0 ? VestActionColor.positive : VestActionColor.negative
+    }
+
+    private var filteredEmptyState: some View {
+        VStack(spacing: 8) {
+            Text("No entries match your filters")
+                .font(.subheadline.weight(.semibold))
+            Text("Adjust filters to see more history")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 }
 
