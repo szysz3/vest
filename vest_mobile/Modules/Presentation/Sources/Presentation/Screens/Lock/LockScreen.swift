@@ -50,16 +50,24 @@ public struct LockScreen: View {
     }
 
     private var appBranding: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image("VestIcon", bundle: .module)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 120, height: 120)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .frame(width: 140, height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .shadow(color: Color(red: 0.2, green: 0.55, blue: 0.9).opacity(0.4), radius: 30, x: 0, y: 4)
+                .shadow(color: Color(red: 0.25, green: 0.8, blue: 0.55).opacity(0.2), radius: 20, x: 0, y: 2)
 
             Text("vest")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white, .white.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
         }
     }
 
