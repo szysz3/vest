@@ -1,9 +1,9 @@
 import SwiftUI
 import Core
+import Domain
 
 struct PortfolioScreen: View {
     @StateObject var viewModel: PortfolioViewModel
-    @State private var isAddSheetPresented = false
 
     var body: some View {
         content
@@ -11,12 +11,6 @@ struct PortfolioScreen: View {
             .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
             .task {
                 await viewModel.loadIfNeeded()
-                await viewModel.loadFormOptionsIfNeeded()
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    addTransactionToolbarButton
-                }
             }
     }
 
@@ -27,78 +21,33 @@ struct PortfolioScreen: View {
             ProgressView()
                 .transition(.opacity)
         case .loaded(let state):
-            PortfolioContent(state: state)
+            PortfolioContent(state: state, syncStatus: viewModel.syncStatus)
                 .transition(.opacity.combined(with: .offset(y: 12)))
-                .sheet(isPresented: $isAddSheetPresented) {
-                    AddTransactionSheet(
-                        options: viewModel.formOptions,
-                        onSave: { draft in
-                            try await viewModel.addTransaction(
-                                amount: draft.amount,
-                                action: draft.action,
-                                assetType: draft.assetType,
-                                operatorName: draft.operatorName,
-                                details: draft.details
-                            )
-                        }
-                    )
-                }
         case .failed(let error):
             Text(error.localizedDescription)
                 .foregroundStyle(.secondary)
                 .transition(.opacity)
         }
     }
-
-    private func presentAddTransaction() {
-        if viewModel.formOptions.isEmpty {
-            Task {
-                await viewModel.loadFormOptionsIfNeeded()
-                await MainActor.run {
-                    if !viewModel.formOptions.isEmpty {
-                        isAddSheetPresented = true
-                    }
-                }
-            }
-        } else {
-            isAddSheetPresented = true
-        }
-    }
-
-    private var addTransactionToolbarButton: some View {
-        Button(action: presentAddTransaction) {
-            Image(systemName: "plus")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(VestActionColor.positive)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(VestActionColor.positive.opacity(0.18))
-                )
-        }
-        .buttonStyle(ScaleToolbarButtonStyle())
-    }
-
-}
-
-private struct ScaleToolbarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.85 : 1)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
 }
 
 private struct PortfolioContent: View {
     let state: PortfolioState
+    let syncStatus: StatementSyncStatus?
     @State private var appeared = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            if state.assets.isEmpty {
-                emptyState
-            } else {
-                VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 20) {
+                if let syncStatus = syncStatus {
+                    SyncStatusBanner(status: syncStatus)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 10)
+                }
+
+                if state.assets.isEmpty {
+                    emptyState
+                } else {
                     chartCard
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 20)
@@ -107,10 +56,10 @@ private struct PortfolioContent: View {
                         .opacity(appeared ? 1 : 0)
                         .offset(y: appeared ? 0 : 20)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 36)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 36)
         }
         .background(VestGradientBackground())
         .environment(\.colorScheme, .dark)
@@ -123,23 +72,30 @@ private struct PortfolioContent: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "chart.pie.fill")
+            Image(systemName: "doc.badge.plus")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("No holdings yet")
+            Text("No statement data yet")
                 .font(.title3.weight(.semibold))
-            Text("Tap + to add your first transaction")
+            Text("Upload brokerage statements via the local Web Portal to populate portfolio summary")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 120)
+        .padding(.top, 80)
     }
 
     private var chartCard: some View {
         VStack {
-            PortfolioPieChart(assets: state.assets, totalAmount: state.totalAmount)
-                .frame(width: 280, height: 280)
+            PortfolioPieChart(
+                assets: state.assets,
+                totalAmount: state.totalAmount,
+                nominalAmount: state.nominalAmount,
+                profitOrLoss: state.profitOrLoss,
+                profitOrLossPct: state.profitOrLossPct
+            )
+            .frame(width: 280, height: 280)
         }
         .padding(20)
         .frame(maxWidth: .infinity)
@@ -148,7 +104,7 @@ private struct PortfolioContent: View {
 
     private var assetsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Holdings")
+            Text("Aggregated Holdings")
                 .font(.title3.weight(.semibold))
 
             ForEach(Array(state.assets.enumerated()), id: \.element.id) { index, asset in
@@ -165,10 +121,56 @@ private struct PortfolioContent: View {
     }
 }
 
+private struct SyncStatusBanner: View {
+    let status: StatementSyncStatus
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: status.allUploaded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(status.allUploaded ? VestActionColor.positive : Color.orange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(status.allUploaded ? "All Statements Up to Date" : "Pending Statement Uploads")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+
+                if status.allUploaded {
+                    Text("\(status.uploadedCount)/\(status.totalCount) Statements Active • Synced \(status.lastSyncDate ?? "")")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else {
+                    Text("\(status.uploadedCount)/\(status.totalCount) Uploaded. Missing: \(status.missingSlots.joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(2)
+                }
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(status.allUploaded ? Color.green.opacity(0.12) : Color.orange.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(status.allUploaded ? Color.green.opacity(0.25) : Color.orange.opacity(0.25), lineWidth: 1)
+                )
+        )
+    }
+}
+
 private struct PortfolioPieChart: View {
     let assets: [PortfolioState.Asset]
     let totalAmount: Double
+    let nominalAmount: Double
+    let profitOrLoss: Double
+    let profitOrLossPct: Double
     @State private var chartProgress: Double = 0
+
+    private var mainDisplayAmount: Double {
+        nominalAmount > 0 ? nominalAmount : totalAmount
+    }
 
     var body: some View {
         ZStack {
@@ -187,8 +189,27 @@ private struct PortfolioPieChart: View {
             }
             .rotationEffect(.degrees(-90))
 
-            formattedAmount
-                .opacity(chartProgress)
+            VStack(spacing: 4) {
+                formattedAmount
+
+                if profitOrLoss != 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: profitOrLoss >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 11, weight: .bold))
+                        let prefix = profitOrLoss >= 0 ? "+" : ""
+                        Text("\(prefix)\(profitOrLoss.formatted(.currency(code: "PLN"))) (\(prefix)\(String(format: "%.2f", profitOrLossPct))%)")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(profitOrLoss >= 0 ? VestActionColor.positive : VestActionColor.negative)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill((profitOrLoss >= 0 ? VestActionColor.positive : VestActionColor.negative).opacity(0.15))
+                    )
+                }
+            }
+            .opacity(chartProgress)
         }
         .padding(10)
         .onAppear {
@@ -199,16 +220,16 @@ private struct PortfolioPieChart: View {
     }
 
     private var formattedAmount: some View {
-        let whole = Int(totalAmount)
-        let fraction = totalAmount - Double(whole)
+        let whole = Int(mainDisplayAmount)
+        let fraction = mainDisplayAmount - Double(whole)
         let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text("\(whole)")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
             Text(",\(fractionText) PLN")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.5))
         }
     }
@@ -216,8 +237,9 @@ private struct PortfolioPieChart: View {
     private var segments: [ChartSegment] {
         var current: Double = 0
         let gap = 0.006
+        let total = max(totalAmount, 1)
         return assets.map { asset in
-            let fraction = max(asset.amount / max(totalAmount, 1), 0)
+            let fraction = max(asset.amount / total, 0)
             let trimmed = max(fraction - gap, 0.002)
             let start = current
             let end = min(current + trimmed, 1)

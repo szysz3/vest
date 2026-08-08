@@ -1,71 +1,105 @@
+import json
 import os
 import sqlite3
+import urllib.request
 import uuid
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
-from enum import Enum
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from parsers import PKOParser, XTBParser
+
 DB_PATH = Path(os.environ.get("DB_PATH", Path(__file__).parent / "vest.db"))
+CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", Path(__file__).parent / "config.json"))
+
+MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB max upload limit
 
 ASSET_TYPES = ["bond", "etf", "stock", "crypto", "gold", "cash"]
 
 DEFAULT_OPERATORS = [
     {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.xtb")), "name": "XTB"},
-    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.bank")), "name": "Bank"},
+    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.pko")), "name": "PKO"},
 ]
 
-
-class TransactionAction(str, Enum):
-    bought = "bought"
-    sold = "sold"
-    cashDeposit = "cashDeposit"
-    cashWithdrawal = "cashWithdrawal"
-    positionClosed = "positionClosed"
+FX_RATE_CACHE = {}
 
 
-class AssetType(str, Enum):
-    bond = "bond"
-    etf = "etf"
-    stock = "stock"
-    crypto = "crypto"
-    gold = "gold"
-    cash = "cash"
+def get_fx_rate(currency: str) -> float:
+    curr = (currency or "PLN").strip().upper()
+    if curr == "PLN":
+        return 1.0
+
+    if curr in FX_RATE_CACHE:
+        return FX_RATE_CACHE[curr]
+
+    url = f"http://api.nbp.pl/api/exchangerates/rates/a/{curr.lower()}/?format=json"
+    req = urllib.request.Request(url, headers={"User-Agent": "VestBackend/1.0", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            rates = data.get("rates", [])
+            if rates:
+                mid_rate = float(rates[0].get("mid", 0.0))
+                if mid_rate > 0:
+                    FX_RATE_CACHE[curr] = mid_rate
+                    return mid_rate
+    except Exception as e:
+        print(f"Warning: Failed to fetch live NBP FX rate for {curr}: {e}")
+
+    fallbacks = {"EUR": 4.30, "USD": 3.75, "GBP": 5.00, "CHF": 4.50}
+    rate = fallbacks.get(curr, 1.0)
+    FX_RATE_CACHE[curr] = rate
+    return rate
 
 
-class Transaction(BaseModel):
-    id: str
-    amount: float
-    name: str
-    action: TransactionAction
-    assetType: AssetType
-    place: str
-    date: datetime
-    details: str = ""
-    profitOrLoss: float | None = None
-
-
-class Operator(BaseModel):
-    id: str
-    name: str
-
-
-class TransactionFormOptions(BaseModel):
-    assetTypes: list[str]
-    operators: list[Operator]
+def is_statement_stale(stmt_date_str: str, threshold_days: int = 30) -> Tuple[bool, int]:
+    """Returns (is_stale, age_in_days). Statement is stale if age > threshold_days (30 days)."""
+    try:
+        stmt_date = datetime.strptime(stmt_date_str[:10], "%Y-%m-%d").date()
+        today = datetime.now(timezone.utc).date()
+        age_days = (today - stmt_date).days
+        return age_days > threshold_days, age_days
+    except Exception:
+        return True, 999
 
 
 class AssetDetailResponse(BaseModel):
     assetType: str
     details: str
+    currency: str
+    nominalAmount: float
     totalAmount: float
+    profitOrLoss: float
+    profitOrLossPct: float
+    nominalAmountPLN: float
+    totalAmountPLN: float
+    profitOrLossPLN: float
+
+
+class StatementSyncStatusResponse(BaseModel):
+    allUploaded: bool
+    uploadedCount: int
+    totalCount: int
+    lastSyncDate: Optional[str]
+    missingSlots: List[str]
+
+
+def load_config() -> dict:
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"users": [], "staleness_threshold_days": 30}
 
 
 @contextmanager
 def get_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -84,7 +118,9 @@ def init_db():
                 action TEXT NOT NULL,
                 asset_type TEXT NOT NULL,
                 place TEXT NOT NULL,
-                date TEXT NOT NULL
+                date TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                profit_or_loss REAL
             )
         """)
         conn.execute("""
@@ -93,14 +129,52 @@ def init_db():
                 name TEXT NOT NULL
             )
         """)
-        # Migrate: add details column if missing
-        cursor = conn.execute("PRAGMA table_info(transactions)")
-        columns = [row["name"] for row in cursor.fetchall()]
-        if "details" not in columns:
-            conn.execute("ALTER TABLE transactions ADD COLUMN details TEXT NOT NULL DEFAULT ''")
-        if "profit_or_loss" not in columns:
-            conn.execute("ALTER TABLE transactions ADD COLUMN profit_or_loss REAL")
-        # Seed operators if empty
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS statement_uploads (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                slot_id TEXT NOT NULL,
+                broker TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                uploaded_at TEXT NOT NULL,
+                statement_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS parsed_holdings (
+                id TEXT PRIMARY KEY,
+                upload_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                details TEXT NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                nominal_amount REAL NOT NULL DEFAULT 0.0,
+                profit_or_loss REAL NOT NULL DEFAULT 0.0,
+                profit_or_loss_pct REAL NOT NULL DEFAULT 0.0,
+                currency TEXT NOT NULL DEFAULT 'PLN',
+                quantity REAL NOT NULL DEFAULT 0.0,
+                amount_pln REAL NOT NULL,
+                nominal_amount_pln REAL NOT NULL DEFAULT 0.0,
+                profit_or_loss_pln REAL NOT NULL DEFAULT 0.0,
+                fx_rate REAL NOT NULL DEFAULT 1.0
+            )
+        """)
+
+        # Migration checks
+        cursor = conn.execute("PRAGMA table_info(parsed_holdings)")
+        cols = [row["name"] for row in cursor.fetchall()]
+        if "nominal_amount" not in cols:
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN nominal_amount REAL NOT NULL DEFAULT 0.0")
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN profit_or_loss REAL NOT NULL DEFAULT 0.0")
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN profit_or_loss_pct REAL NOT NULL DEFAULT 0.0")
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN nominal_amount_pln REAL NOT NULL DEFAULT 0.0")
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN profit_or_loss_pln REAL NOT NULL DEFAULT 0.0")
+        if "fx_rate" not in cols:
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN fx_rate REAL NOT NULL DEFAULT 1.0")
+
+        # Seed operators
         cursor = conn.execute("SELECT COUNT(*) FROM operators")
         if cursor.fetchone()[0] == 0:
             for op in DEFAULT_OPERATORS:
@@ -119,119 +193,336 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Vest Backend", lifespan=lifespan)
 
+# Allow local LAN clients & mobile apps to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/transactions", response_model=list[Transaction])
-async def get_transactions():
+api_router = APIRouter(prefix="/api")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def get_portal_ui():
+    template_path = Path(__file__).parent / "templates" / "index.html"
+    if not template_path.exists():
+        raise HTTPException(status_code=404, detail="Portal template missing")
+    with open(template_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.get("/portal/status")
+@api_router.get("/portal/status")
+async def get_portal_status():
+    config = load_config()
+    users_config = config.get("users", [])
+    threshold_days = config.get("staleness_threshold_days", 30)
+
+    total_slots = 0
+    uploaded_slots = 0
+    result_users = []
+
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC").fetchall()
-    return [
-        Transaction(
-            id=row["id"],
-            amount=row["amount"],
-            name=row["name"],
-            action=row["action"],
-            assetType=row["asset_type"],
-            place=row["place"],
-            date=row["date"],
-            details=row["details"],
-            profitOrLoss=row["profit_or_loss"],
+        for user in users_config:
+            user_id = user["id"]
+            user_name = user["name"]
+            slots = user.get("expected_statements", [])
+
+            user_slot_data = []
+            for slot in slots:
+                total_slots += 1
+                slot_id = slot["slot_id"]
+
+                row = conn.execute(
+                    """
+                    SELECT * FROM statement_uploads 
+                    WHERE user_id = ? AND slot_id = ? AND status = 'active'
+                    ORDER BY uploaded_at DESC LIMIT 1
+                """,
+                    (user_id, slot_id),
+                ).fetchone()
+
+                is_uploaded = row is not None
+                is_stale = False
+                age_days = 0
+
+                if is_uploaded:
+                    is_stale, age_days = is_statement_stale(row["statement_date"], threshold_days)
+                    if not is_stale:
+                        uploaded_slots += 1
+
+                    last_upload = {
+                        "filename": row["filename"],
+                        "uploaded_at": row["uploaded_at"],
+                        "statement_date": row["statement_date"],
+                        "is_stale": is_stale,
+                        "age_days": age_days,
+                    }
+                else:
+                    last_upload = None
+
+                user_slot_data.append(
+                    {
+                        "slot_id": slot_id,
+                        "broker": slot["broker"],
+                        "label": slot["label"],
+                        "is_uploaded": is_uploaded and not is_stale,
+                        "is_stale": is_stale,
+                        "last_upload": last_upload,
+                    }
+                )
+
+            result_users.append(
+                {
+                    "id": user_id,
+                    "name": user_name,
+                    "slots": user_slot_data,
+                }
+            )
+
+    return {
+        "all_uploaded": uploaded_slots == total_slots and total_slots > 0,
+        "uploaded_slots": uploaded_slots,
+        "total_slots": total_slots,
+        "staleness_threshold_days": threshold_days,
+        "users": result_users,
+    }
+
+
+@app.post("/portal/upload")
+@api_router.post("/portal/upload")
+async def upload_statement(
+    user_id: str = Form(...),
+    slot_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    config = load_config()
+    user_conf = next((u for u in config.get("users", []) if u["id"] == user_id), None)
+    if not user_conf:
+        raise HTTPException(status_code=404, detail="User not found in config")
+
+    slot_conf = next((s for s in user_conf.get("expected_statements", []) if s["slot_id"] == slot_id), None)
+    if not slot_conf:
+        raise HTTPException(status_code=404, detail="Statement slot not found")
+
+    broker = slot_conf["broker"].lower()
+    content = await file.read()
+
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Uploaded file size exceeds maximum limit (25 MB)")
+
+    # Select parser
+    if broker == "pko":
+        parser = PKOParser()
+    elif broker == "xtb":
+        parser = XTBParser()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported broker: {broker}")
+
+    try:
+        statement = parser.parse(content, filename=file.filename or "")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    upload_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    stmt_date = statement.statement_date or datetime.now().strftime("%Y-%m-%d")
+
+    threshold_days = config.get("staleness_threshold_days", 30)
+    stale, age = is_statement_stale(stmt_date, threshold_days)
+    if stale:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Statement is outdated ({stmt_date}, {age} days old). Please upload a fresh statement generated within the last {threshold_days} days."
         )
-        for row in rows
-    ]
 
-
-@app.post("/transactions", response_model=Transaction, status_code=201)
-async def add_transaction(transaction: Transaction):
     with get_db() as conn:
-        try:
+        conn.execute(
+            "UPDATE statement_uploads SET status = 'superseded' WHERE user_id = ? AND slot_id = ? AND status = 'active'",
+            (user_id, slot_id),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO statement_uploads (id, user_id, slot_id, broker, filename, uploaded_at, statement_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+        """,
+            (upload_id, user_id, slot_id, broker, file.filename or "statement", now_iso, stmt_date),
+        )
+
+        for holding in statement.holdings:
+            fx = get_fx_rate(holding.currency)
+            amount_pln = holding.amount * fx
+            nominal_pln = holding.nominal_amount * fx
+            profit_pln = holding.profit_or_loss * fx
+
             conn.execute(
-                "INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                """
+                INSERT INTO parsed_holdings (id, upload_id, user_id, asset_type, details, name, amount, nominal_amount, profit_or_loss, profit_or_loss_pct, currency, quantity, amount_pln, nominal_amount_pln, profit_or_loss_pln, fx_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
                 (
-                    transaction.id,
-                    transaction.amount,
-                    transaction.name,
-                    transaction.action.value,
-                    transaction.assetType.value,
-                    transaction.place,
-                    transaction.date.isoformat(),
-                    transaction.details,
-                    transaction.profitOrLoss,
+                    str(uuid.uuid4()),
+                    upload_id,
+                    user_id,
+                    holding.asset_type,
+                    holding.details,
+                    holding.name,
+                    holding.amount,
+                    holding.nominal_amount,
+                    holding.profit_or_loss,
+                    holding.profit_or_loss_pct,
+                    holding.currency,
+                    holding.quantity,
+                    amount_pln,
+                    nominal_pln,
+                    profit_pln,
+                    fx,
                 ),
             )
-            conn.commit()
-        except sqlite3.IntegrityError:
-            raise HTTPException(status_code=409, detail="Transaction already exists")
-    return transaction
 
-
-@app.post("/transactions/batch", response_model=list[Transaction], status_code=201)
-async def add_transactions_batch(transactions: list[Transaction]):
-    with get_db() as conn:
-        try:
-            for transaction in transactions:
+        for tx in statement.transactions:
+            try:
                 conn.execute(
-                    "INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    """
+                    INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                     (
-                        transaction.id,
-                        transaction.amount,
-                        transaction.name,
-                        transaction.action.value,
-                        transaction.assetType.value,
-                        transaction.place,
-                        transaction.date.isoformat(),
-                        transaction.details,
-                        transaction.profitOrLoss,
+                        tx.id,
+                        tx.amount,
+                        tx.name,
+                        tx.action,
+                        tx.asset_type,
+                        tx.place,
+                        tx.date,
+                        tx.details,
+                        tx.profit_or_loss,
                     ),
                 )
-            conn.commit()
-        except sqlite3.IntegrityError:
-            raise HTTPException(status_code=409, detail="One or more transactions already exist")
-    return transactions
+            except sqlite3.IntegrityError:
+                pass
 
+        conn.commit()
 
-@app.get("/transactions/form-options", response_model=TransactionFormOptions)
-async def get_form_options():
-    with get_db() as conn:
-        rows = conn.execute("SELECT * FROM operators").fetchall()
-    return TransactionFormOptions(
-        assetTypes=ASSET_TYPES,
-        operators=[Operator(id=row["id"], name=row["name"]) for row in rows],
-    )
+    return {
+        "upload_id": upload_id,
+        "statement_date": stmt_date,
+        "holdings_count": len(statement.holdings),
+        "transactions_count": len(statement.transactions),
+    }
 
 
 @app.get("/portfolio/details", response_model=list[AssetDetailResponse])
+@api_router.get("/portfolio/details", response_model=list[AssetDetailResponse])
 async def get_portfolio_details():
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC").fetchall()
-
-    holdings: dict[tuple[str, str], float] = {}
-    for row in rows:
-        asset_type = row["asset_type"]
-        details = row["details"]
-        if not details:
-            continue
-        key = (asset_type, details)
-        action = row["action"]
-        amount = row["amount"]
-        if action in ("bought", "cashDeposit"):
-            holdings[key] = holdings.get(key, 0) + amount
-        elif action in ("sold", "cashWithdrawal", "positionClosed"):
-            holdings[key] = holdings.get(key, 0) - amount
+        rows = conn.execute("""
+            SELECT h.asset_type, h.details, h.currency,
+                   SUM(h.nominal_amount) as total_nominal,
+                   SUM(h.amount) as total_amount,
+                   SUM(h.profit_or_loss) as total_profit,
+                   SUM(h.nominal_amount_pln) as total_nominal_pln,
+                   SUM(h.amount_pln) as total_amount_pln,
+                   SUM(h.profit_or_loss_pln) as total_profit_pln
+            FROM parsed_holdings h
+            JOIN statement_uploads u ON h.upload_id = u.id
+            WHERE u.status = 'active'
+            GROUP BY h.asset_type, h.details, h.currency
+            ORDER BY h.asset_type, h.details
+        """).fetchall()
 
     result = []
-    for (asset_type, details), total in holdings.items():
-        if total > 0:
-            result.append(AssetDetailResponse(
-                assetType=asset_type,
-                details=details,
-                totalAmount=total,
-            ))
+    for row in rows:
+        currency = row["currency"] or "PLN"
+        nom = round(row["total_nominal"] or 0.0, 2)
+        tot = round(row["total_amount"] or 0.0, 2)
+        prof = round(row["total_profit"] or 0.0, 2)
+        pct = round((prof / nom * 100.0), 2) if nom > 0 else 0.0
 
-    result.sort(key=lambda x: (x.assetType, x.details))
+        nom_pln = round(row["total_nominal_pln"] or 0.0, 2)
+        tot_pln = round(row["total_amount_pln"] or 0.0, 2)
+        prof_pln = round(row["total_profit_pln"] or 0.0, 2)
+
+        result.append(
+            AssetDetailResponse(
+                assetType=row["asset_type"],
+                details=row["details"],
+                currency=currency,
+                nominalAmount=nom,
+                totalAmount=tot,
+                profitOrLoss=prof,
+                profitOrLossPct=pct,
+                nominalAmountPLN=nom_pln,
+                totalAmountPLN=tot_pln,
+                profitOrLossPLN=prof_pln,
+            )
+        )
+
     return result
 
+
+@app.get("/statements/status", response_model=StatementSyncStatusResponse)
+@api_router.get("/statements/status", response_model=StatementSyncStatusResponse)
+async def get_statements_sync_status():
+    config = load_config()
+    users_config = config.get("users", [])
+    threshold_days = config.get("staleness_threshold_days", 30)
+
+    total_count = 0
+    uploaded_count = 0
+    missing_slots = []
+    latest_sync_date = None
+
+    with get_db() as conn:
+        for user in users_config:
+            user_name = user["name"]
+            for slot in user.get("expected_statements", []):
+                total_count += 1
+                row = conn.execute(
+                    """
+                    SELECT uploaded_at, statement_date FROM statement_uploads 
+                    WHERE user_id = ? AND slot_id = ? AND status = 'active'
+                    ORDER BY uploaded_at DESC LIMIT 1
+                """,
+                    (user["id"], slot["slot_id"]),
+                ).fetchone()
+
+                if row:
+                    s_date = row["statement_date"]
+                    is_stale, age_days = is_statement_stale(s_date, threshold_days)
+                    if not is_stale:
+                        uploaded_count += 1
+                        if not latest_sync_date or s_date > latest_sync_date:
+                            latest_sync_date = s_date
+                    else:
+                        missing_slots.append(f"{user_name}: {slot['label']} (Outdated: {age_days} days old)")
+                else:
+                    missing_slots.append(f"{user_name}: {slot['label']} (Missing)")
+
+    return StatementSyncStatusResponse(
+        allUploaded=uploaded_count == total_count and total_count > 0,
+        uploadedCount=uploaded_count,
+        totalCount=total_count,
+        lastSyncDate=latest_sync_date,
+        missingSlots=missing_slots,
+    )
+
+
+@app.get("/transactions")
+@api_router.get("/transactions")
+async def get_transactions():
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC LIMIT 200").fetchall()
+    return [dict(r) for r in rows]
+
+
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)

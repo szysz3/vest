@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vest | Brokerage Statement Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --card-bg: rgba(22, 27, 44, 0.75);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-primary: #6366f1;
+            --accent-primary-hover: #4f46e5;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --radius-lg: 20px;
+            --radius-md: 14px;
+            --radius-sm: 8px;
+            --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-primary), #818cf8);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .brand-text h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-text p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Overall Status Card */
+        .summary-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 1.75rem 2rem;
+            margin-bottom: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .summary-info h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+
+        .summary-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1.25rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-badge.complete {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-badge.incomplete {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* Partners Grid */
+        .partners-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+            gap: 1.75rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .partner-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 1.75rem;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .partner-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .partner-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .partner-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .partner-progress {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        /* Slot Card */
+        .slot-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .slot-card {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .slot-card.is-uploaded {
+            border-style: solid;
+            border-color: rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.04);
+        }
+
+        .slot-card.is-stale {
+            border-style: dashed;
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .slot-card.drag-over {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .slot-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .slot-title {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .broker-tag {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .broker-tag.xtb {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        .broker-tag.pko {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .slot-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 0.8rem;
+        }
+
+        .upload-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            padding: 0.55rem 1.1rem;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .upload-btn:hover {
+            background: var(--accent-primary-hover);
+        }
+
+        .file-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Toast Notifications */
+        #toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header">
+        <div class="brand">
+            <div class="brand-icon">V</div>
+            <div class="brand-text">
+                <h1>Vest Statement Portal</h1>
+                <p>Upload brokerage account statements for partner portfolio aggregation (Monthly Sync Required)</p>
+            </div>
+        </div>
+        <button class="refresh-btn" onclick="fetchStatus()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh Status
+        </button>
+    </header>
+
+    <div class="summary-card" id="summaryCard">
+        <div class="summary-info">
+            <h2 id="summaryTitle">Loading compliance status...</h2>
+            <p id="summarySubtitle">Checking uploaded brokerage statements</p>
+        </div>
+        <div class="status-badge incomplete" id="summaryBadge">
+            <span>Checking...</span>
+        </div>
+    </div>
+
+    <div class="partners-grid" id="partnersGrid">
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    async function fetchStatus() {
+        try {
+            const res = await fetch('/portal/status');
+            const data = await res.json();
+            renderStatus(data);
+        } catch (err) {
+            showToast('Failed to load status: ' + err.message, true);
+        }
+    }
+
+    function renderStatus(data) {
+        const summaryTitle = document.getElementById('summaryTitle');
+        const summarySubtitle = document.getElementById('summarySubtitle');
+        const summaryBadge = document.getElementById('summaryBadge');
+        const grid = document.getElementById('partnersGrid');
+
+        if (data.all_uploaded) {
+            summaryTitle.textContent = "All Partner Statements Fresh & Complete";
+            summarySubtitle.textContent = `All ${data.uploaded_slots}/${data.total_slots} statement slots are uploaded and generated within the last ${data.staleness_threshold_days} days. Ready for mobile app sync.`;
+            summaryBadge.className = "status-badge complete";
+            summaryBadge.innerHTML = "✓ Fully Up To Date";
+        } else {
+            summaryTitle.textContent = "Pending / Outdated Statement Uploads";
+            summarySubtitle.textContent = `${data.uploaded_slots} of ${data.total_slots} statement slots are fresh (<= ${data.staleness_threshold_days} days old). Please upload updated monthly statements.`;
+            summaryBadge.className = "status-badge incomplete";
+            summaryBadge.innerHTML = `⚠️ ${data.total_slots - data.uploaded_slots} Action Required`;
+        }
+
+        grid.innerHTML = data.users.map(user => {
+            const uploadedCount = user.slots.filter(s => s.is_uploaded && !s.is_stale).length;
+            const totalCount = user.slots.length;
+
+            return `
+                <div class="partner-card">
+                    <div class="partner-header">
+                        <div class="partner-name">${escapeHtml(user.name)}</div>
+                        <div class="partner-progress">${uploadedCount}/${totalCount} Fresh</div>
+                    </div>
+                    <div class="slot-list">
+                        ${user.slots.map(slot => renderSlot(user.id, slot)).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderSlot(userId, slot) {
+        const isUploaded = slot.is_uploaded;
+        const isStale = slot.is_stale;
+        const brokerClass = slot.broker.toLowerCase();
+
+        let metaText = "No statement uploaded yet";
+        let statusBadge = '<span style="color:var(--accent-warning);font-size:0.85rem;font-weight:600;">Pending</span>';
+
+        if (slot.last_upload) {
+            metaText = `Uploaded: ${slot.last_upload.uploaded_at.split('T')[0]} • Statement date: ${slot.last_upload.statement_date}`;
+            if (isStale) {
+                statusBadge = `<span style="color:var(--accent-danger);font-weight:700;font-size:0.85rem;">⚠️ Outdated (${slot.last_upload.age_days}d old)</span>`;
+            } else {
+                statusBadge = '<span style="color:var(--accent-success);font-weight:700;font-size:0.85rem;">✓ Active (Fresh)</span>';
+            }
+        }
+
+        return `
+            <div class="slot-card ${isUploaded ? 'is-uploaded' : (isStale ? 'is-stale' : '')}" 
+                 id="slot_${slot.slot_id}"
+                 ondragover="handleDragOver(event, 'slot_${slot.slot_id}')"
+                 ondragleave="handleDragLeave(event, 'slot_${slot.slot_id}')"
+                 ondrop="handleDrop(event, '${userId}', '${slot.slot_id}')">
+                
+                <div class="slot-top">
+                    <div class="slot-title">
+                        <span>${escapeHtml(slot.label)}</span>
+                        <span class="broker-tag ${brokerClass}">${slot.broker.toUpperCase()}</span>
+                    </div>
+                    ${statusBadge}
+                </div>
+
+                <div class="slot-meta">
+                    ${escapeHtml(metaText)}
+                </div>
+
+                <div class="upload-controls">
+                    <input type="file" id="input_${slot.slot_id}" class="file-input" onchange="onFileSelected('${userId}', '${slot.slot_id}', this)">
+                    <button class="upload-btn" type="button" onclick="document.getElementById('input_${slot.slot_id}').click()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        ${isUploaded ? 'Replace Statement' : (isStale ? 'Upload Fresh Statement' : 'Upload Statement')}
+                    </button>
+                    <span class="file-hint">${slot.broker === 'xtb' ? 'Accepts .zip or .xlsx' : 'Accepts .xls'} • Max 30 days old</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleDragOver(e, slotElementId) {
+        e.preventDefault();
+        document.getElementById(slotElementId).classList.add('drag-over');
+    }
+
+    function handleDragLeave(e, slotElementId) {
+        document.getElementById(slotElementId).classList.remove('drag-over');
+    }
+
+    function handleDrop(e, userId, slotId) {
+        e.preventDefault();
+        document.getElementById(`slot_${slotId}`).classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            uploadFile(userId, slotId, e.dataTransfer.files[0]);
+        }
+    }
+
+    function onFileSelected(userId, slotId, input) {
+        if (input.files && input.files.length > 0) {
+            uploadFile(userId, slotId, input.files[0]);
+            input.value = '';
+        }
+    }
+
+    async function uploadFile(userId, slotId, file) {
+        if (!file || !file.name) {
+            showToast('Error: Please select a valid file.', true);
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('user_id', userId);
+        formData.append('slot_id', slotId);
+        formData.append('file', file, file.name);
+
+        showToast(`Parsing and uploading ${file.name}...`);
+
+        try {
+            const res = await fetch('/portal/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Upload failed');
+            }
+
+            showToast(`✓ Statement uploaded! Parsed ${data.holdings_count} assets (${data.statement_date})`);
+            fetchStatus();
+        } catch (err) {
+            showToast('Error: ' + err.message, true);
+        }
+    }
+
+    function showToast(msg, isError = false) {
+        const toast = document.getElementById('toast');
+        toast.style.borderColor = isError ? 'var(--accent-danger)' : 'var(--accent-success)';
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 6000);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    fetchStatus();
+</script>
+</body>
+</html>

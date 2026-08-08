@@ -13,10 +13,18 @@ public struct GetPortfolioSummaryUseCase: GetPortfolioSummaryUseCaseProtocol {
     }
 
     public func execute() async throws -> PortfolioSummary {
-        let transactions = try await repository.fetchTransactions()
-        let totals = transactions.reduce(into: [AssetType: Double]()) { result, transaction in
-            let signedAmount = signedValue(for: transaction)
-            result[transaction.assetType, default: 0] += signedAmount
+        let details = try await repository.fetchPortfolioDetails()
+        var totals: [AssetType: Double] = [:]
+        var totalNominalPLN: Double = 0
+        var totalCurrentPLN: Double = 0
+        var totalProfitPLN: Double = 0
+
+        for item in details {
+            let itemVal = item.nominalAmountPLN > 0 ? item.nominalAmountPLN : item.totalAmountPLN
+            totals[item.assetType, default: 0] += itemVal
+            totalNominalPLN += item.nominalAmountPLN
+            totalCurrentPLN += item.totalAmountPLN
+            totalProfitPLN += item.profitOrLossPLN
         }
 
         let assets = totals
@@ -24,16 +32,14 @@ public struct GetPortfolioSummaryUseCase: GetPortfolioSummaryUseCaseProtocol {
             .map { PortfolioAsset(assetType: $0.key, amount: $0.value) }
             .sorted { $0.amount > $1.amount }
 
-        let totalAmount = assets.reduce(0) { $0 + $1.amount }
-        return PortfolioSummary(totalAmount: totalAmount, assets: assets)
-    }
+        let profitPct = totalNominalPLN > 0 ? (totalProfitPLN / totalNominalPLN * 100.0) : 0.0
 
-    private func signedValue(for transaction: Transaction) -> Double {
-        switch transaction.action {
-        case .bought, .cashDeposit:
-            return transaction.amount
-        case .sold, .cashWithdrawal, .positionClosed:
-            return -transaction.amount
-        }
+        return PortfolioSummary(
+            nominalAmount: totalNominalPLN,
+            totalAmount: totalCurrentPLN,
+            profitOrLoss: totalProfitPLN,
+            profitOrLossPct: profitPct,
+            assets: assets
+        )
     }
 }

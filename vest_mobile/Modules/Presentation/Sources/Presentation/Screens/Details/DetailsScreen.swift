@@ -10,31 +10,6 @@ struct DetailsScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
             .task { await viewModel.loadIfNeeded() }
-            .sheet(item: sellSheetBinding) { _ in
-                if let sheet = viewModel.sellSheet {
-                    SellConfirmationSheet(
-                        state: sheet,
-                        onAmountChanged: { viewModel.sellSheet?.sellAmountText = $0 },
-                        onClosePositionChanged: { viewModel.sellSheet?.closePosition = $0 },
-                        onOperatorChanged: { viewModel.sellSheet?.selectedOperator = $0 },
-                        onConfirm: { Task { await viewModel.confirmSell() } },
-                        onCancel: { viewModel.sellSheet = nil }
-                    )
-                }
-            }
-    }
-
-    private var sellSheetBinding: Binding<SellSheetIdentifier?> {
-        Binding(
-            get: {
-                viewModel.sellSheet.map { SellSheetIdentifier(details: $0.details) }
-            },
-            set: { newValue in
-                if newValue == nil {
-                    viewModel.sellSheet = nil
-                }
-            }
-        )
     }
 
     @ViewBuilder
@@ -44,7 +19,7 @@ struct DetailsScreen: View {
             ProgressView()
                 .transition(.opacity)
         case .loaded(let state):
-            DetailsContent(state: state, onSell: viewModel.requestSell)
+            DetailsContent(state: state)
                 .transition(.opacity.combined(with: .offset(y: 12)))
         case .failed(let error):
             Text(error.localizedDescription)
@@ -54,14 +29,8 @@ struct DetailsScreen: View {
     }
 }
 
-private struct SellSheetIdentifier: Identifiable, Equatable {
-    let details: String
-    var id: String { details }
-}
-
 private struct DetailsContent: View {
     let state: DetailsState
-    let onSell: (DetailsState.Item) -> Void
 
     var body: some View {
         if state.sections.isEmpty {
@@ -80,14 +49,6 @@ private struct DetailsContent: View {
                                 color: assetTone(for: section.assetType).color,
                                 animationDelay: Double(sectionIndex) * 0.1 + Double(index) * 0.05
                             )
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    onSell(item)
-                                } label: {
-                                    Label("Sell", systemImage: "arrow.down.left")
-                                }
-                                .tint(.red)
-                            }
                             .listRowBackground(Color.white.opacity(0.04))
                             .listRowSeparatorTint(Color.white.opacity(0.06))
                         }
@@ -117,9 +78,9 @@ private struct DetailsContent: View {
             Image(systemName: "square.stack.3d.up")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("No positions yet")
+            Text("No positions uploaded")
                 .font(.title3.weight(.semibold))
-            Text("Add transactions with asset symbols to see your positions here")
+            Text("Upload brokerage statements in the local Web Portal to see your detailed holdings here")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -130,25 +91,69 @@ private struct DetailsContent: View {
     }
 }
 
-
 private struct DetailsItemRow: View {
     let item: DetailsState.Item
     let color: Color
     var animationDelay: Double = 0
     @State private var appeared = false
 
+    private var isProfit: Bool {
+        item.profitOrLoss >= 0
+    }
+
+    private var profitColor: Color {
+        isProfit ? VestActionColor.positive : VestActionColor.negative
+    }
+
+    private var profitArrowIcon: String {
+        isProfit ? "arrow.up.right" : "arrow.down.right"
+    }
+
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.details)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.details)
+                        .font(.headline)
+                    
+                    if item.totalAmount != item.nominalAmount && item.nominalAmount > 0 {
+                        Text("Nominal: \(item.nominalAmount.formatted(.currency(code: item.currency)))")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    // Primary Value in original document currency (e.g. EUR)
+                    Text(item.totalAmount.formatted(.currency(code: item.currency)))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+
+                    // Primary Profit Badge in original document currency
+                    if item.profitOrLoss != 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: profitArrowIcon)
+                                .font(.system(size: 10, weight: .bold))
+                            let prefix = isProfit ? "+" : ""
+                            Text("\(prefix)\(item.profitOrLoss.formatted(.currency(code: item.currency))) (\(prefix)\(String(format: "%.2f", item.profitOrLossPct))%)")
+                                .font(.caption.weight(.bold))
+                        }
+                        .foregroundStyle(profitColor)
+                    }
+
+                    // Less emphasized PLN converted value (if non-PLN currency)
+                    if item.currency.uppercased() != "PLN" {
+                        let prefix = isProfit ? "+" : ""
+                        Text("≈ \(item.totalAmountPLN.formatted(.currency(code: "PLN"))) (\(prefix)\(item.profitOrLossPLN.formatted(.currency(code: "PLN")))")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
             }
-            Spacer()
-            Text(item.totalAmount.formatted(.currency(code: "PLN")))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 12)
         .onAppear {
@@ -158,245 +163,6 @@ private struct DetailsItemRow: View {
         }
     }
 }
-
-// MARK: - Sell Confirmation Sheet
-
-private struct SellConfirmationSheet: View {
-    let state: SellSheetState
-    let onAmountChanged: (String) -> Void
-    let onClosePositionChanged: (Bool) -> Void
-    let onOperatorChanged: (TransactionOperator) -> Void
-    let onConfirm: () -> Void
-    let onCancel: () -> Void
-
-    @FocusState private var amountFocused: Bool
-
-    var body: some View {
-        ZStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    header
-                    amountSection
-                    operatorSection
-                    closePositionSection
-                    confirmButton
-                }
-                .animation(.easeOut(duration: 0.3), value: state.closePosition)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 6)
-            }
-            .scrollDismissesKeyboard(.immediately)
-            .onTapGesture { amountFocused = false }
-            .opacity(state.isConfirmed ? 0 : 1)
-
-            if state.isConfirmed {
-                VStack(spacing: 14) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 52))
-                        .foregroundStyle(VestActionColor.positive)
-                        .symbolRenderingMode(.hierarchical)
-                    Text("Sale Confirmed")
-                        .font(.title3.weight(.semibold))
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
-        }
-        .animation(.easeOut(duration: 0.3), value: state.isConfirmed)
-        .background(sheetBackground)
-        .environment(\.colorScheme, .dark)
-        .presentationDetents([.fraction(0.7)])
-        .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(state.isSaving || state.isConfirmed)
-    }
-
-    private var header: some View {
-        VStack(spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Sell \(state.details)")
-                        .font(.title3.weight(.semibold))
-                    Text("Current holding: \(state.holdingAmount.formatted(.currency(code: "PLN")))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(action: onCancel) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-            Divider()
-                .overlay(Color.white.opacity(0.08))
-        }
-    }
-
-    private var amountSection: some View {
-        SellSectionCard(title: "Sell Amount") {
-            HStack(spacing: 12) {
-                Text("PLN")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                TextField("0.00", text: Binding(
-                    get: { state.sellAmountText },
-                    set: { onAmountChanged($0) }
-                ))
-                .keyboardType(.decimalPad)
-                .focused($amountFocused)
-                .font(.title3.weight(.semibold))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-        }
-    }
-
-    private var operatorSection: some View {
-        SellSectionCard(title: "Operator") {
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10)
-            ], spacing: 10) {
-                ForEach(state.availableOperators) { op in
-                    Button {
-                        onOperatorChanged(op)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "building.2.fill")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(op.id == state.selectedOperator.id ? .black : .white.opacity(0.35))
-                            Text(op.name)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(op.id == state.selectedOperator.id ? .black : .white.opacity(0.35))
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .padding(.horizontal, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(op.id == state.selectedOperator.id ? VestTone.electric.color : Color.white.opacity(0.06))
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private var closePositionSection: some View {
-        SellSectionCard(title: "Options") {
-            VStack(spacing: 0) {
-                Toggle(isOn: Binding(
-                    get: { state.closePosition },
-                    set: { onClosePositionChanged($0) }
-                )) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Close Position")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Fully liquidate and record profit/loss")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .tint(VestActionColor.negative)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-
-                if state.closePosition, let pl = state.profitOrLoss {
-                    Divider()
-                        .overlay(Color.white.opacity(0.06))
-                        .padding(.horizontal, 14)
-
-                    HStack {
-                        let isProfit = pl >= 0
-                        let color = isProfit ? VestActionColor.positive : VestActionColor.negative
-                        let sign = isProfit ? "+" : ""
-                        Text("P/L")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Image(systemName: isProfit ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(color)
-                        Text("\(sign)\(pl.formatted(.currency(code: "PLN")))")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(color)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .transition(.opacity.combined(with: .offset(y: -8)))
-                }
-            }
-        }
-    }
-
-    private var confirmButton: some View {
-        Button(action: onConfirm) {
-            HStack {
-                Spacer()
-                if state.isSaving {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Text("Confirm Sale")
-                        .font(.headline)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(state.isValid ? VestActionColor.negative : Color.white.opacity(0.12))
-            )
-        }
-        .disabled(!state.isValid || state.isSaving)
-        .foregroundStyle(state.isValid ? .white : .secondary)
-        .padding(.top, 4)
-    }
-
-    private var sheetBackground: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.10, blue: 0.16),
-                Color(red: 0.11, green: 0.13, blue: 0.20),
-                Color(red: 0.16, green: 0.18, blue: 0.26)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-    }
-}
-
-private struct SellSectionCard<Content: View>: View {
-    let title: String
-    let content: Content
-
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            content
-        }
-        .padding(14)
-        .background(VestCardBackground(cornerRadius: 16))
-    }
-}
-
-// MARK: - Asset Helpers
 
 private func assetTitle(for assetType: AssetType) -> String {
     switch assetType {

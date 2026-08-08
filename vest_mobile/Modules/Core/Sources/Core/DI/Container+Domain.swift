@@ -1,31 +1,10 @@
 import Domain
 import Factory
 
-// Register use case implementations.
-// Example:
-//   public extension Container {
-//       var getItemsUseCase: Factory<GetItemsUseCaseProtocol> {
-//           self {
-//               GetItemsUseCase(repository: self.itemsRepository())
-//           }
-//       }
-//   }
 public extension Container {
     var getTransactionsUseCase: Factory<GetTransactionsUseCaseProtocol> {
         self {
             GetTransactionsUseCase(repository: self.transactionRepository())
-        }
-    }
-
-    var addTransactionUseCase: Factory<AddTransactionUseCaseProtocol> {
-        self {
-            AddTransactionUseCase(repository: self.transactionRepository())
-        }
-    }
-
-    var getTransactionFormOptionsUseCase: Factory<GetTransactionFormOptionsUseCaseProtocol> {
-        self {
-            GetTransactionFormOptionsUseCase(repository: self.transactionRepository())
         }
     }
 
@@ -38,6 +17,12 @@ public extension Container {
     var getPortfolioDetailsUseCase: Factory<GetPortfolioDetailsUseCaseProtocol> {
         self {
             GetPortfolioDetailsUseCase(repository: self.transactionRepository())
+        }
+    }
+
+    var getStatementSyncStatusUseCase: Factory<GetStatementSyncStatusUseCaseProtocol> {
+        self {
+            GetStatementSyncStatusUseCase(repository: self.transactionRepository())
         }
     }
 

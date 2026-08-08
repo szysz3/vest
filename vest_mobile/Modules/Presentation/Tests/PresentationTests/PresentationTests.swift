@@ -6,34 +6,19 @@ import Domain
 @Test func portfolioViewModelInitialState() {
     let viewModel = PortfolioViewModel(
         getPortfolioSummaryUseCase: StubGetPortfolioSummaryUseCase(),
-        addTransactionUseCase: StubAddTransactionUseCase(),
-        getTransactionFormOptionsUseCase: StubGetTransactionFormOptionsUseCase()
+        getStatementSyncStatusUseCase: StubGetStatementSyncStatusUseCase()
     )
-    #expect(viewModel.state.isIdle)
-}
-
-@MainActor
-@Test func historyViewModelInitialState() {
-    let viewModel = HistoryViewModel(getTransactionsUseCase: StubGetTransactionsUseCase())
     #expect(viewModel.state.isIdle)
 }
 
 private struct StubGetPortfolioSummaryUseCase: GetPortfolioSummaryUseCaseProtocol {
     func execute() async throws -> PortfolioSummary {
-        PortfolioSummary(totalAmount: 0, assets: [])
+        PortfolioSummary(nominalAmount: 0, totalAmount: 0, profitOrLoss: 0, profitOrLossPct: 0, assets: [])
     }
 }
 
-private struct StubAddTransactionUseCase: AddTransactionUseCaseProtocol {
-    func execute(transaction: Transaction) async throws {}
-}
-
-private struct StubGetTransactionFormOptionsUseCase: GetTransactionFormOptionsUseCaseProtocol {
-    func execute() async throws -> TransactionFormOptions {
-        TransactionFormOptions.empty
+private struct StubGetStatementSyncStatusUseCase: GetStatementSyncStatusUseCaseProtocol {
+    func execute() async throws -> StatementSyncStatus {
+        StatementSyncStatus(allUploaded: true, uploadedCount: 2, totalCount: 2, lastSyncDate: "2026-08-07", missingSlots: [])
     }
-}
-
-private struct StubGetTransactionsUseCase: GetTransactionsUseCaseProtocol {
-    func execute() async throws -> [Transaction] { [] }
 }

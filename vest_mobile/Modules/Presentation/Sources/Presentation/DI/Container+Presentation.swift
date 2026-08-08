@@ -7,22 +7,15 @@ public extension Container {
         self {
             PortfolioViewModel(
                 getPortfolioSummaryUseCase: self.getPortfolioSummaryUseCase(),
-                addTransactionUseCase: self.addTransactionUseCase(),
-                getTransactionFormOptionsUseCase: self.getTransactionFormOptionsUseCase()
+                getStatementSyncStatusUseCase: self.getStatementSyncStatusUseCase()
             )
         }
-    }
-
-    var historyViewModel: Factory<HistoryViewModel> {
-        self { HistoryViewModel(getTransactionsUseCase: self.getTransactionsUseCase()) }
     }
 
     var detailsViewModel: Factory<DetailsViewModel> {
         self {
             DetailsViewModel(
-                getPortfolioDetailsUseCase: self.getPortfolioDetailsUseCase(),
-                addTransactionUseCase: self.addTransactionUseCase(),
-                getTransactionFormOptionsUseCase: self.getTransactionFormOptionsUseCase()
+                getPortfolioDetailsUseCase: self.getPortfolioDetailsUseCase()
             )
         }
     }
