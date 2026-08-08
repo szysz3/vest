@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ── Vest Backend – Host Setup & Deployment Script ────────────────────────────
-# Tested on: Debian 12 / Ubuntu 22.04+
-# Run as root or with sudo.
+# Tested on: Debian 12 / Ubuntu 22.04+ / macOS
+# Run as root or with sudo: sudo ./setup.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env"
@@ -12,6 +12,9 @@ ENV_EXAMPLE="${SCRIPT_DIR}/.env.example"
 log()  { echo -e "\n\033[1;32m[SETUP]\033[0m $*"; }
 warn() { echo -e "\n\033[1;33m[WARN]\033[0m $*"; }
 err()  { echo -e "\n\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
+
+# ── Pre-flight root / sudo check ────────────────────────────────────────────
+[[ $EUID -eq 0 ]] || err "This script must be run as root (or with sudo):\n    sudo ./setup.sh"
 
 prompt_env_var() {
     local key="$1"
@@ -92,9 +95,6 @@ CRON_USER="${SUDO_USER:-root}"
 CRON_USER_HOME="$(getent passwd "${CRON_USER}" | cut -d: -f6)"
 DEPLOY_DIR="${VEST_DEPLOY_DIR}"
 
-# ── Pre-flight checks ───────────────────────────────────────────────────────
-[[ $EUID -eq 0 ]] || err "This script must be run as root (or with sudo)."
-
 log "Updating package index..."
 apt-get update -qq
 
@@ -137,13 +137,17 @@ cp "${SCRIPT_DIR}/docker-compose.yml" "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/.dockerignore"      "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/backup.sh"          "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/.env"               "${DEPLOY_DIR}/"
+cp "${SCRIPT_DIR}/config.json"        "${DEPLOY_DIR}/"
+cp -r "${SCRIPT_DIR}/parsers"         "${DEPLOY_DIR}/"
+cp -r "${SCRIPT_DIR}/templates"       "${DEPLOY_DIR}/"
+
 chmod +x "${DEPLOY_DIR}/backup.sh"
 chown "${CRON_USER}":"${CRON_USER}" "${DEPLOY_DIR}/.env"
 chmod 600 "${DEPLOY_DIR}/.env"
 
 log "Verifying deployment files..."
-for f in app.py requirements.txt Dockerfile docker-compose.yml .dockerignore backup.sh .env; do
-    [[ -f "${DEPLOY_DIR}/${f}" ]] || err "Missing ${DEPLOY_DIR}/${f} — copy failed."
+for f in app.py requirements.txt Dockerfile docker-compose.yml .dockerignore backup.sh .env config.json parsers templates; do
+    [[ -e "${DEPLOY_DIR}/${f}" ]] || err "Missing ${DEPLOY_DIR}/${f} — copy failed."
 done
 log "All files deployed to ${DEPLOY_DIR}:"
 ls -la "${DEPLOY_DIR}/"
