@@ -164,8 +164,9 @@ else
 fi
 
 # ── 5. Build & start containers ─────────────────────────────────────────────
-log "Building and starting containers..."
-docker compose -f "${DEPLOY_DIR}/docker-compose.yml" --project-directory "${DEPLOY_DIR}" up --build -d
+log "Building and starting containers (fresh build without cache)..."
+docker compose -f "${DEPLOY_DIR}/docker-compose.yml" --project-directory "${DEPLOY_DIR}" build --no-cache
+docker compose -f "${DEPLOY_DIR}/docker-compose.yml" --project-directory "${DEPLOY_DIR}" up -d --force-recreate
 
 log "Waiting for API to become healthy..."
 for i in $(seq 1 15); do
