@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from parsers import PKOParser, XTBParser
+from parsers import BondsParser, EquitiesParser
 
 DB_PATH = Path(os.environ.get("DB_PATH", Path(__file__).parent / "vest.db"))
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", Path(__file__).parent / "config.json"))
@@ -23,8 +23,8 @@ MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB max upload limit
 ASSET_TYPES = ["bond", "etf", "stock", "crypto", "gold", "cash"]
 
 DEFAULT_OPERATORS = [
-    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.xtb")), "name": "XTB"},
-    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.pko")), "name": "PKO"},
+    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.broker_a")), "name": "Broker A"},
+    {"id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "vest.operator.broker_b")), "name": "Broker B"},
 ]
 
 FX_RATE_CACHE = {}
@@ -315,10 +315,10 @@ async def upload_statement(
         raise HTTPException(status_code=400, detail="Uploaded file size exceeds maximum limit (25 MB)")
 
     # Select parser
-    if broker == "pko":
-        parser = PKOParser()
-    elif broker == "xtb":
-        parser = XTBParser()
+    if broker in ["broker_b", "bonds"]:
+        parser = BondsParser()
+    elif broker in ["broker_a", "equities"]:
+        parser = EquitiesParser()
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported broker: {broker}")
 

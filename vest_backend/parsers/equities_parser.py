@@ -8,15 +8,15 @@ import pandas as pd
 from parsers.base import ParsedHolding, ParsedStatement, ParsedTransaction
 
 
-class XTBParser:
-    """Parser for XTB brokerage statements (.xlsx, .xls, or .zip containing .xlsx/.xls files)."""
+class EquitiesParser:
+    """Parser for equities brokerage statements (.xlsx, .xls, or .zip containing .xlsx/.xls files)."""
 
     def parse(self, file_content: bytes, filename: str = "") -> ParsedStatement:
         excel_items = self._extract_excel_items(file_content, filename)
         if not excel_items:
             raise ValueError("No valid Excel spreadsheet (.xlsx/.xls) found in uploaded file")
 
-        statement = ParsedStatement(broker="xtb")
+        statement = ParsedStatement(broker="broker_a")
 
         # Initial currency hint from filename
         detected_curr = self._detect_currency_from_name(filename)
@@ -224,7 +224,7 @@ class XTBParser:
                         name=name,
                         action=action,
                         asset_type=asset_type,
-                        place="XTB",
+                        place="Brokerage",
                         date=time_val if time_val and time_val != "nan" else datetime.now().isoformat(),
                         amount=abs(amount),
                         details=details,

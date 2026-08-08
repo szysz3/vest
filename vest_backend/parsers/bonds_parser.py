@@ -5,11 +5,11 @@ import pandas as pd
 from parsers.base import ParsedHolding, ParsedStatement, ParsedTransaction
 
 
-class PKOParser:
-    """Parser for PKO BP Polish Treasury Bonds Excel statements (StanRachunkuRejestrowego_*.xls)."""
+class BondsParser:
+    """Parser for bond brokerage Excel statements (.xls)."""
 
     def parse(self, file_content: bytes, filename: str = "") -> ParsedStatement:
-        statement = ParsedStatement(broker="pko", account_currency="PLN")
+        statement = ParsedStatement(broker="broker_b", account_currency="PLN")
 
         date_match = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
         if date_match:
@@ -44,7 +44,7 @@ class PKOParser:
                 holding = ParsedHolding(
                     asset_type="bond",
                     details=emisja,
-                    name=f"Obligacje {emisja}",
+                    name=f"Bonds {emisja}",
                     amount=cur_val,
                     nominal_amount=nominal_val,
                     profit_or_loss=profit_or_loss,
@@ -55,6 +55,6 @@ class PKOParser:
                 statement.holdings.append(holding)
 
         except Exception as e:
-            raise ValueError(f"Failed to parse PKO statement: {e}")
+            raise ValueError(f"Failed to parse statement: {e}")
 
         return statement

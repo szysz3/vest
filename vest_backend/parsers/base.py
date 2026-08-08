@@ -5,8 +5,8 @@ from typing import List, Optional
 @dataclass
 class ParsedHolding:
     asset_type: str  # bond, etf, stock, crypto, gold, cash
-    details: str  # e.g. "ROR0127", "VWCE.DE"
-    name: str  # e.g. "Obligacje ROR0127", "FTSE All-World"
+    details: str  # e.g. "BOND01", "ETF01"
+    name: str  # e.g. "Bonds BOND01", "Global Index ETF"
     amount: float  # current market value (Wartość Aktualna)
     nominal_amount: float = 0.0  # nominal value / cost basis (Wartość Nominalna)
     profit_or_loss: float = 0.0  # profit/loss difference

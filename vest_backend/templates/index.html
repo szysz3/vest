@@ -233,33 +233,46 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 0.75rem;
             margin-bottom: 0.75rem;
         }
 
         .slot-title {
             display: flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.65rem;
             font-weight: 600;
             font-size: 0.95rem;
+            min-width: 0;
+        }
+
+        .slot-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .broker-tag {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 700;
-            padding: 0.2rem 0.6rem;
+            padding: 0.25rem 0.65rem;
             border-radius: 6px;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            flex-shrink: 0;
             text-transform: uppercase;
         }
 
-        .broker-tag.xtb {
+        .broker-tag.broker_a, .broker-tag.equities {
             background: rgba(99, 102, 241, 0.2);
             color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
         }
 
-        .broker-tag.pko {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
+        .broker-tag.broker_b, .broker-tag.bonds {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         .slot-meta {
@@ -408,7 +421,8 @@
     function renderSlot(userId, slot) {
         const isUploaded = slot.is_uploaded;
         const isStale = slot.is_stale;
-        const brokerClass = slot.broker.toLowerCase();
+        const brokerClass = slot.broker.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const displayBroker = slot.broker.replace(/_/g, ' ').toUpperCase();
 
         let metaText = "No statement uploaded yet";
         let statusBadge = '<span style="color:var(--accent-warning);font-size:0.85rem;font-weight:600;">Pending</span>';
@@ -431,8 +445,8 @@
                 
                 <div class="slot-top">
                     <div class="slot-title">
-                        <span>${escapeHtml(slot.label)}</span>
-                        <span class="broker-tag ${brokerClass}">${slot.broker.toUpperCase()}</span>
+                        <span class="broker-tag ${brokerClass}">${escapeHtml(displayBroker)}</span>
+                        <span class="slot-label">${escapeHtml(slot.label)}</span>
                     </div>
                     ${statusBadge}
                 </div>
@@ -447,7 +461,7 @@
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                         ${isUploaded ? 'Replace Statement' : (isStale ? 'Upload Fresh Statement' : 'Upload Statement')}
                     </button>
-                    <span class="file-hint">${slot.broker === 'xtb' ? 'Accepts .zip or .xlsx' : 'Accepts .xls'} • Max 30 days old</span>
+                    <span class="file-hint">${slot.broker.toLowerCase() === 'broker_a' ? 'Accepts .zip or .xlsx' : 'Accepts .xls'} • Max 30 days old</span>
                 </div>
             </div>
         `;

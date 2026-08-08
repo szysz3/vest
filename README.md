@@ -18,13 +18,13 @@ Vest automates portfolio aggregation across partners saving money on separate br
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Local Web Portal UI                      │
-│        Upload PKO (.xls) & XTB (.zip / .xlsx) Reports      │
+│      Upload Bonds (.xls) & Equities (.zip / .xlsx) Reports  │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   FastAPI Backend Server                    │
-│   • Statement Parsers (PKO Treasury Bonds & XTB Stocks/ETFs)│
+│   • Statement Parsers (Bonds & Stocks/ETFs)                 │
 │   • Live NBP FX Rate Converter (EUR/USD -> PLN)             │
 │   • Monthly 30-Day Staleness Enforcement                    │
 └──────────────────────────────┬──────────────────────────────┘
@@ -42,10 +42,10 @@ Vest automates portfolio aggregation across partners saving money on separate br
 
 ## Features
 
-- **Multi-Partner Statement Tracking**: Configurable slots per partner (e.g., Partner 1 tracks XTB + PKO; Partner 2 tracks PKO).
+- **Multi-Partner Statement Tracking**: Configurable slots per partner (e.g., Partner 1 tracks Broker A + Broker B; Partner 2 tracks Broker B).
 - **Pluggable Statement Parsers**:
-  - **PKO BP**: Extracts Polish Treasury Bond emission codes (e.g., `ROR0127`, `ROD0138`), nominal values, current values, and accrued interest.
-  - **XTB**: Parses open positions (`.xlsx`, `.xls`, or `.zip` archives containing nested folders), ticker symbols (`VWCE.DE`), Net Profit, and Profit %.
+  - **Bonds Broker**: Extracts bond asset codes (e.g., `BOND01`, `BOND02`), nominal values, current values, and accrued interest.
+  - **Equities Broker**: Parses open positions (`.xlsx`, `.xls`, or `.zip` archives containing nested folders), ticker symbols (e.g., `ETF01`), Net Profit, and Profit %.
 - **Live FX Currency Conversion**: Integrates live exchange rate API from Narodowy Bank Polski (NBP) to denominate foreign holdings into PLN.
 - **30-Day Monthly Staleness Enforcement**: Rejects outdated reports (> 30 days old) and flags expired slots on both portal and mobile app.
 - **Strictly Read-Only Mobile App**: Mobile UI focuses on clean tracking, removing manual transaction sheets and display clutter.
@@ -67,7 +67,7 @@ vest/
 │       ├── Core/         # DI container (Factory), view state
 │       └── Presentation/ # UI screens, view models, design system
 └── vest_backend/         # Python API & Web Portal (FastAPI)
-    ├── parsers/          # PKO & XTB statement parsers
+    ├── parsers/          # Statement parsers
     ├── templates/        # Glassmorphic Web Portal HTML/CSS/JS
     └── config.json       # Users & expected statement slot definitions
 ```
