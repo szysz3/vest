@@ -211,7 +211,15 @@ async def get_portal_ui():
     if not template_path.exists():
         raise HTTPException(status_code=404, detail="Portal template missing")
     with open(template_path, "r", encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    return HTMLResponse(
+        content=content,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/portal/status")
