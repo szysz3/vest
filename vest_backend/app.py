@@ -30,6 +30,21 @@ DEFAULT_OPERATORS = [
 FX_RATE_CACHE = {}
 
 
+def get_configured_operators() -> List[dict]:
+    config = load_config()
+    operators = []
+    seen = set()
+    for user in config.get("users", []):
+        for slot in user.get("expected_statements", []):
+            b_type = slot.get("broker", "").lower()
+            if b_type and b_type not in seen:
+                seen.add(b_type)
+                b_name = slot.get("broker_name", slot.get("name", b_type.replace("_", " ").title()))
+                op_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"vest.operator.{b_type}"))
+                operators.append({"id": op_id, "name": b_name})
+    return operators or DEFAULT_OPERATORS
+
+
 def get_fx_rate(currency: str) -> float:
     curr = (currency or "PLN").strip().upper()
     if curr == "PLN":
@@ -177,7 +192,7 @@ def init_db():
         # Seed operators
         cursor = conn.execute("SELECT COUNT(*) FROM operators")
         if cursor.fetchone()[0] == 0:
-            for op in DEFAULT_OPERATORS:
+            for op in get_configured_operators():
                 conn.execute(
                     "INSERT INTO operators (id, name) VALUES (?, ?)",
                     (op["id"], op["name"]),
@@ -272,10 +287,12 @@ async def get_portal_status():
                 else:
                     last_upload = None
 
+                broker_name = slot.get("broker_name", slot.get("name", slot["broker"].replace("_", " ").title()))
                 user_slot_data.append(
                     {
                         "slot_id": slot_id,
                         "broker": slot["broker"],
+                        "broker_name": broker_name,
                         "label": slot["label"],
                         "is_uploaded": is_uploaded and not is_stale,
                         "is_stale": is_stale,

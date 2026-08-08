@@ -42,7 +42,7 @@ Vest automates portfolio aggregation across partners saving money on separate br
 
 ## Features
 
-- **Multi-Partner Statement Tracking**: Configurable slots per partner (e.g., Partner 1 tracks Broker A + Broker B; Partner 2 tracks Broker B).
+- **Multi-Partner Statement Tracking**: Configurable slots per partner with customizable display names (`broker_name` in `config.json`) while maintaining generic parser types (`broker_a`, `broker_b`).
 - **Pluggable Statement Parsers**:
   - **Bonds Broker**: Extracts bond asset codes (e.g., `BOND01`, `BOND02`), nominal values, current values, and accrued interest.
   - **Equities Broker**: Parses open positions (`.xlsx`, `.xls`, or `.zip` archives containing nested folders), ticker symbols (e.g., `ETF01`), Net Profit, and Profit %.

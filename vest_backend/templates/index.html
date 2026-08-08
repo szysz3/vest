@@ -422,7 +422,7 @@
         const isUploaded = slot.is_uploaded;
         const isStale = slot.is_stale;
         const brokerClass = slot.broker.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        const displayBroker = slot.broker.replace(/_/g, ' ').toUpperCase();
+        const displayBroker = slot.broker_name || slot.broker.replace(/_/g, ' ').toUpperCase();
 
         let metaText = "No statement uploaded yet";
         let statusBadge = '<span style="color:var(--accent-warning);font-size:0.85rem;font-weight:600;">Pending</span>';
