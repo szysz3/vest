@@ -130,6 +130,7 @@ apt-get install -y -qq rsync gzip sqlite3
 # ── 3. Deploy application ───────────────────────────────────────────────────
 log "Deploying application to ${DEPLOY_DIR}..."
 mkdir -p "${DEPLOY_DIR}"
+rm -rf "${DEPLOY_DIR}/parsers" "${DEPLOY_DIR}/templates"
 cp "${SCRIPT_DIR}/app.py"             "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/requirements.txt"   "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/Dockerfile"         "${DEPLOY_DIR}/"
