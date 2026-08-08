@@ -61,7 +61,7 @@ ensure_env_file() {
         prompt_env_var "VEST_DB_CONTAINER_PATH" "DB path in container" "/app/data/vest.db"
         prompt_env_var "VEST_BACKUP_RETENTION_DAYS" "Backup retention days" "14"
         prompt_env_var "VEST_BACKUP_LOG" "Backup log file" "/var/log/vest_backup.log"
-        prompt_env_var "VEST_API_HEALTH_URL" "API health URL" "http://localhost:8002/transactions/form-options"
+        prompt_env_var "VEST_API_HEALTH_URL" "API health URL" "http://localhost:8002/portal/status"
         prompt_env_var "VEST_BACKUP_SSH_OPTS" "SSH opts for backup" "-o StrictHostKeyChecking=accept-new"
         prompt_env_var "VEST_BACKUP_CONTAINER_TEMP_PATH" "Temp path in container" "/tmp/vest_backup.db"
         prompt_env_var "VEST_BACKUP_FILENAME_PREFIX" "Backup filename prefix" "vest"
