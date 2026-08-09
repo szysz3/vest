@@ -11,7 +11,8 @@ from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from parsers import BondsParser, EquitiesParser
@@ -222,6 +223,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Vest Backend", lifespan=lifespan)
 
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 # Allow local LAN clients & mobile apps to connect
 app.add_middleware(
     CORSMiddleware,
@@ -232,6 +237,21 @@ app.add_middleware(
 )
 
 api_router = APIRouter(prefix="/api")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.png", include_in_schema=False)
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/favicon-32x32.png", include_in_schema=False)
+@app.get("/favicon-64x64.png", include_in_schema=False)
+@app.get("/favicon-512x512.png", include_in_schema=False)
+async def get_favicon_png():
+    icon_path = STATIC_DIR / "favicon_app.png"
+    if not icon_path.exists():
+        icon_path = STATIC_DIR / "vest_icon.png"
+    if icon_path.exists():
+        return FileResponse(icon_path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Favicon missing")
 
 
 @app.get("/", response_class=HTMLResponse)

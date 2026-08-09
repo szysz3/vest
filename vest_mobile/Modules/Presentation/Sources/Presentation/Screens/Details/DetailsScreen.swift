@@ -118,14 +118,14 @@ private struct DetailsItemRow: View {
                     
                     if item.assetType == .bond, let maturity = bondMaturityLabel(for: item.details) {
                         Text("Maturity: \(maturity)")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Color.pink.opacity(0.85))
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.45))
                     }
 
                     if let acc = item.accountNumber, !acc.isEmpty {
                         Text("Acc: \(acc)")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.indigo.opacity(0.85))
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.35))
                     }
 
                     if item.totalAmount != item.nominalAmount && item.nominalAmount > 0 {
