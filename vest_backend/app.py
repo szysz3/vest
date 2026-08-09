@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sqlite3
 import urllib.request
 import uuid
@@ -95,6 +96,7 @@ class AssetDetailResponse(BaseModel):
     nominalAmountPLN: float
     totalAmountPLN: float
     profitOrLossPLN: float
+    accountNumber: Optional[str] = None
 
 
 class StatementSyncStatusResponse(BaseModel):
@@ -135,7 +137,9 @@ def init_db():
                 place TEXT NOT NULL,
                 date TEXT NOT NULL,
                 details TEXT NOT NULL DEFAULT '',
-                profit_or_loss REAL
+                profit_or_loss REAL,
+                account_number TEXT NOT NULL DEFAULT '',
+                currency TEXT NOT NULL DEFAULT 'PLN'
             )
         """)
         conn.execute("""
@@ -173,7 +177,8 @@ def init_db():
                 amount_pln REAL NOT NULL,
                 nominal_amount_pln REAL NOT NULL DEFAULT 0.0,
                 profit_or_loss_pln REAL NOT NULL DEFAULT 0.0,
-                fx_rate REAL NOT NULL DEFAULT 1.0
+                fx_rate REAL NOT NULL DEFAULT 1.0,
+                account_number TEXT NOT NULL DEFAULT ''
             )
         """)
 
@@ -188,6 +193,15 @@ def init_db():
             conn.execute("ALTER TABLE parsed_holdings ADD COLUMN profit_or_loss_pln REAL NOT NULL DEFAULT 0.0")
         if "fx_rate" not in cols:
             conn.execute("ALTER TABLE parsed_holdings ADD COLUMN fx_rate REAL NOT NULL DEFAULT 1.0")
+        if "account_number" not in cols:
+            conn.execute("ALTER TABLE parsed_holdings ADD COLUMN account_number TEXT NOT NULL DEFAULT ''")
+
+        cursor = conn.execute("PRAGMA table_info(transactions)")
+        cols = [row["name"] for row in cursor.fetchall()]
+        if "account_number" not in cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN account_number TEXT NOT NULL DEFAULT ''")
+        if "currency" not in cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'PLN'")
 
         # Seed operators
         cursor = conn.execute("SELECT COUNT(*) FROM operators")
@@ -386,8 +400,8 @@ async def upload_statement(
 
             conn.execute(
                 """
-                INSERT INTO parsed_holdings (id, upload_id, user_id, asset_type, details, name, amount, nominal_amount, profit_or_loss, profit_or_loss_pct, currency, quantity, amount_pln, nominal_amount_pln, profit_or_loss_pln, fx_rate)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO parsed_holdings (id, upload_id, user_id, asset_type, details, name, amount, nominal_amount, profit_or_loss, profit_or_loss_pct, currency, quantity, amount_pln, nominal_amount_pln, profit_or_loss_pln, fx_rate, account_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     str(uuid.uuid4()),
@@ -406,6 +420,7 @@ async def upload_statement(
                     nominal_pln,
                     profit_pln,
                     fx,
+                    holding.account_number or "",
                 ),
             )
 
@@ -413,8 +428,8 @@ async def upload_statement(
             try:
                 conn.execute(
                     """
-                    INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO transactions (id, amount, name, action, asset_type, place, date, details, profit_or_loss, account_number, currency)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         tx.id,
@@ -426,6 +441,8 @@ async def upload_statement(
                         tx.date,
                         tx.details,
                         tx.profit_or_loss,
+                        tx.account_number or "",
+                        tx.currency or "PLN",
                     ),
                 )
             except sqlite3.IntegrityError:
@@ -433,12 +450,43 @@ async def upload_statement(
 
         conn.commit()
 
+    accounts = sorted(
+        list(
+            set(h.account_number for h in statement.holdings if h.account_number)
+            | set(t.account_number for t in statement.transactions if t.account_number)
+        )
+    )
+    currencies = sorted(
+        list(set(h.currency for h in statement.holdings) | set(t.currency for t in statement.transactions))
+    )
+
     return {
         "upload_id": upload_id,
         "statement_date": stmt_date,
         "holdings_count": len(statement.holdings),
         "transactions_count": len(statement.transactions),
+        "accounts_count": len(accounts),
+        "accounts": accounts,
+        "currencies": currencies,
     }
+
+
+def parse_bond_maturity_key(text: str) -> Tuple[int, int, str]:
+    """Extract (year, month, text) from bond name like COI0730 -> (2030, 7, 'COI0730') for sorting closest maturity first."""
+    s = (text or "").upper()
+    m = re.search(r"([A-Z]{2,4})\s*(\d{2})(\d{2})", s)
+    if m:
+        mm = int(m.group(2))
+        yy = int(m.group(3))
+        if 1 <= mm <= 12:
+            return (2000 + yy, mm, text)
+    m2 = re.search(r"\b(\d{2})(\d{2})\b", s)
+    if m2:
+        mm = int(m2.group(1))
+        yy = int(m2.group(2))
+        if 1 <= mm <= 12:
+            return (2000 + yy, mm, text)
+    return (9999, 99, text or "")
 
 
 @app.get("/portfolio/details", response_model=list[AssetDetailResponse])
@@ -452,7 +500,8 @@ async def get_portfolio_details():
                    SUM(h.profit_or_loss) as total_profit,
                    SUM(h.nominal_amount_pln) as total_nominal_pln,
                    SUM(h.amount_pln) as total_amount_pln,
-                   SUM(h.profit_or_loss_pln) as total_profit_pln
+                   SUM(h.profit_or_loss_pln) as total_profit_pln,
+                   GROUP_CONCAT(DISTINCT h.account_number) as account_numbers
             FROM parsed_holdings h
             JOIN statement_uploads u ON h.upload_id = u.id
             WHERE u.status = 'active'
@@ -471,6 +520,7 @@ async def get_portfolio_details():
         nom_pln = round(row["total_nominal_pln"] or 0.0, 2)
         tot_pln = round(row["total_amount_pln"] or 0.0, 2)
         prof_pln = round(row["total_profit_pln"] or 0.0, 2)
+        acc_nums = row["account_numbers"] or None
 
         result.append(
             AssetDetailResponse(
@@ -484,10 +534,18 @@ async def get_portfolio_details():
                 nominalAmountPLN=nom_pln,
                 totalAmountPLN=tot_pln,
                 profitOrLossPLN=prof_pln,
+                accountNumber=acc_nums,
             )
         )
 
-    return result
+    bonds = [r for r in result if r.assetType.lower() in ["bond", "bonds"]]
+    bonds.sort(key=lambda r: parse_bond_maturity_key(r.details))
+
+    non_bonds = [r for r in result if r.assetType.lower() not in ["bond", "bonds"]]
+    non_bonds.sort(key=lambda r: (r.assetType, r.details))
+
+    return bonds + non_bonds
+
 
 
 @app.get("/statements/status", response_model=StatementSyncStatusResponse)

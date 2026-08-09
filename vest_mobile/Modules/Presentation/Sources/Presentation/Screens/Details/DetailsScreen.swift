@@ -116,6 +116,18 @@ private struct DetailsItemRow: View {
                     Text(item.details)
                         .font(.headline)
                     
+                    if item.assetType == .bond, let maturity = bondMaturityLabel(for: item.details) {
+                        Text("Maturity: \(maturity)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Color.pink.opacity(0.85))
+                    }
+
+                    if let acc = item.accountNumber, !acc.isEmpty {
+                        Text("Acc: \(acc)")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.indigo.opacity(0.85))
+                    }
+
                     if item.totalAmount != item.nominalAmount && item.nominalAmount > 0 {
                         Text("Nominal: \(item.nominalAmount.formatted(.currency(code: item.currency)))")
                             .font(.caption)
@@ -195,4 +207,20 @@ private func assetTone(for assetType: AssetType) -> VestTone {
     case .gold: return .amber
     case .cash: return .sage
     }
+}
+
+private func bondMaturityLabel(for details: String) -> String? {
+    let upper = details.uppercased()
+    let pattern = #"([A-Z]{2,4})\s*(\d{2})(\d{2})"#
+    if let regex = try? NSRegularExpression(pattern: pattern),
+       let match = regex.firstMatch(in: upper, options: [], range: NSRange(location: 0, length: upper.utf16.count)) {
+        if let mmRange = Range(match.range(at: 2), in: upper),
+           let yyRange = Range(match.range(at: 3), in: upper),
+           let mm = Int(upper[mmRange]),
+           let yy = Int(upper[yyRange]),
+           (1...12).contains(mm) {
+            return String(format: "%02d.20%02d", mm, yy)
+        }
+    }
+    return nil
 }

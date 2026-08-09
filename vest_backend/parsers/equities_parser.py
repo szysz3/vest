@@ -3,13 +3,13 @@ import re
 import uuid
 import zipfile
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import pandas as pd
 from parsers.base import ParsedHolding, ParsedStatement, ParsedTransaction
 
 
 class EquitiesParser:
-    """Parser for equities brokerage statements (.xlsx, .xls, or .zip containing .xlsx/.xls files)."""
+    """Parser for equities brokerage statements (.xlsx, .xls, or .zip containing multi-account/multi-currency reports)."""
 
     def parse(self, file_content: bytes, filename: str = "") -> ParsedStatement:
         excel_items = self._extract_excel_items(file_content, filename)
@@ -25,41 +25,42 @@ class EquitiesParser:
         latest_date = None
 
         for item_name, excel_bytes in excel_items:
-            # Check currency from item name if nested inside zip
-            item_curr = self._detect_currency_from_name(item_name)
-            if item_curr != "PLN":
-                statement.account_currency = item_curr
-
             try:
                 excel = pd.ExcelFile(io.BytesIO(excel_bytes))
+                item_acc = self._extract_account_number_from_excel(excel) or self._detect_account_from_name(item_name)
+                item_curr = self._detect_currency_from_excel(excel) or self._detect_currency_from_name(item_name)
 
                 if "Open Positions" in excel.sheet_names:
                     df_open = pd.read_excel(excel, sheet_name="Open Positions", header=None)
-                    stmt_date = self._parse_open_positions(df_open, statement, default_curr=statement.account_currency)
+                    stmt_date = self._parse_open_positions(
+                        df_open, statement, item_curr=item_curr, item_acc=item_acc
+                    )
                     if stmt_date and (not latest_date or stmt_date > latest_date):
                         latest_date = stmt_date
 
                 if "Cash Operations" in excel.sheet_names:
                     df_cash = pd.read_excel(excel, sheet_name="Cash Operations", header=None)
-                    self._parse_cash_operations(df_cash, statement)
+                    self._parse_cash_operations(df_cash, statement, item_curr=item_curr, item_acc=item_acc)
 
             except Exception:
                 continue
 
-        if latest_date:
-            statement.statement_date = latest_date
-        else:
-            date_match = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
-            if date_match:
-                statement.statement_date = date_match.group(1)
-            else:
-                date_match_digits = re.search(r"(\d{8})", filename)
-                if date_match_digits:
-                    raw = date_match_digits.group(1)
-                    statement.statement_date = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
-                else:
-                    statement.statement_date = datetime.now().strftime("%Y-%m-%d")
+        # Extract dates from filename (e.g. 51385154_51385465_51385764_2006-01-01_2026-08-09.zip -> 2026-08-09)
+        filename_dates = re.findall(r"(\d{4}-\d{2}-\d{2})", filename)
+        if filename_dates:
+            max_fn_date = max(filename_dates)
+            if not latest_date or max_fn_date > latest_date:
+                latest_date = max_fn_date
 
+        if not latest_date:
+            date_match_digits = re.search(r"(\d{8})", filename)
+            if date_match_digits:
+                raw = date_match_digits.group(1)
+                latest_date = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+            else:
+                latest_date = datetime.now().strftime("%Y-%m-%d")
+
+        statement.statement_date = latest_date
         return statement
 
     def _detect_currency_from_name(self, text: str) -> str:
@@ -67,6 +68,12 @@ class EquitiesParser:
         if m:
             return m.group(1)
         return "PLN"
+
+    def _detect_account_from_name(self, text: str) -> str:
+        m = re.search(r"\b(\d{6,12})\b", text)
+        if m:
+            return m.group(1)
+        return ""
 
     def _extract_excel_items(self, file_content: bytes, filename: str) -> List[Tuple[str, bytes]]:
         fname_lower = filename.lower()
@@ -88,9 +95,39 @@ class EquitiesParser:
 
         return [(filename, file_content)]
 
-    def _parse_open_positions(self, df: pd.DataFrame, statement: ParsedStatement, default_curr: str = "PLN") -> str:
+    def _extract_account_number_from_excel(self, excel: pd.ExcelFile) -> str:
+        for sheet in excel.sheet_names:
+            try:
+                df = pd.read_excel(excel, sheet_name=sheet, header=None, nrows=10)
+                for _, row in df.iterrows():
+                    row_vals = [str(val).strip() for val in row.values if pd.notna(val)]
+                    for idx, val in enumerate(row_vals):
+                        if "account number" in val.lower() and idx + 1 < len(row_vals):
+                            candidate = row_vals[idx + 1]
+                            if candidate.isdigit() or candidate.isalnum():
+                                return candidate
+            except Exception:
+                continue
+        return ""
+
+    def _detect_currency_from_excel(self, excel: pd.ExcelFile) -> Optional[str]:
+        for sheet in excel.sheet_names:
+            try:
+                df = pd.read_excel(excel, sheet_name=sheet, header=None, nrows=10)
+                for _, row in df.iterrows():
+                    row_vals = [str(val).strip().upper() for val in row.values if pd.notna(val)]
+                    for val in row_vals:
+                        if val in ["EUR", "USD", "PLN", "GBP", "CHF"]:
+                            return val
+            except Exception:
+                continue
+        return None
+
+    def _parse_open_positions(
+        self, df: pd.DataFrame, statement: ParsedStatement, item_curr: str = "PLN", item_acc: str = ""
+    ) -> str:
         header_idx = None
-        account_currency = default_curr
+        account_currency = item_curr
         parsed_date = None
 
         for idx, row in df.iterrows():
@@ -110,8 +147,6 @@ class EquitiesParser:
 
             if "Instrument/Position" in row_str and "Ticker" in row_str:
                 header_idx = idx
-
-        statement.account_currency = account_currency
 
         if header_idx is not None:
             df_positions = df.iloc[header_idx + 1 :].copy()
@@ -150,12 +185,18 @@ class EquitiesParser:
                 details = ticker if ticker and ticker != "nan" else instrument
                 name = f"{instrument} ({details})" if ticker else instrument
 
-                existing = next((h for h in statement.holdings if h.details == details), None)
+                existing = next(
+                    (h for h in statement.holdings if h.details == details and h.currency == account_currency), None
+                )
                 if existing:
                     existing.amount += val_float
                     existing.nominal_amount += nominal_val
                     existing.profit_or_loss += profit_float
                     existing.quantity += vol_float
+                    if not existing.account_number and item_acc:
+                        existing.account_number = item_acc
+                    elif existing.account_number and item_acc and item_acc not in existing.account_number:
+                        existing.account_number = f"{existing.account_number}, {item_acc}"
                     if existing.nominal_amount > 0:
                         existing.profit_or_loss_pct = (existing.profit_or_loss / existing.nominal_amount) * 100.0
                 else:
@@ -169,12 +210,15 @@ class EquitiesParser:
                         profit_or_loss_pct=profit_pct_float,
                         currency=account_currency,
                         quantity=vol_float,
+                        account_number=item_acc,
                     )
                     statement.holdings.append(holding)
 
         return parsed_date or ""
 
-    def _parse_cash_operations(self, df: pd.DataFrame, statement: ParsedStatement):
+    def _parse_cash_operations(
+        self, df: pd.DataFrame, statement: ParsedStatement, item_curr: str = "PLN", item_acc: str = ""
+    ):
         header_idx = None
         for idx, row in df.iterrows():
             row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
@@ -228,5 +272,7 @@ class EquitiesParser:
                         date=time_val if time_val and time_val != "nan" else datetime.now().isoformat(),
                         amount=abs(amount),
                         details=details,
+                        account_number=item_acc,
+                        currency=item_curr,
                     )
                     statement.transactions.append(tx)

@@ -13,6 +13,7 @@ class ParsedHolding:
     profit_or_loss_pct: float = 0.0  # profit/loss percentage
     currency: str = "PLN"
     quantity: float = 0.0
+    account_number: str = ""
 
 
 @dataclass
@@ -26,6 +27,8 @@ class ParsedTransaction:
     amount: float
     details: str = ""
     profit_or_loss: Optional[float] = None
+    account_number: str = ""
+    currency: str = "PLN"
 
 
 @dataclass
@@ -35,3 +38,4 @@ class ParsedStatement:
     holdings: List[ParsedHolding] = field(default_factory=list)
     transactions: List[ParsedTransaction] = field(default_factory=list)
     account_currency: str = "PLN"
+

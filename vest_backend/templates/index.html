@@ -461,7 +461,7 @@
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                         ${isUploaded ? 'Replace Statement' : (isStale ? 'Upload Fresh Statement' : 'Upload Statement')}
                     </button>
-                    <span class="file-hint">${slot.broker.toLowerCase() === 'broker_a' ? 'Accepts .zip or .xlsx' : 'Accepts .xls'} • Max 30 days old</span>
+                    <span class="file-hint">${slot.broker.toLowerCase() === 'broker_a' ? 'Accepts .zip (multi-account/currency) or .xlsx' : 'Accepts .xls'} • Max 30 days old</span>
                 </div>
             </div>
         `;
@@ -515,7 +515,9 @@
                 throw new Error(data.detail || 'Upload failed');
             }
 
-            showToast(`✓ Statement uploaded! Parsed ${data.holdings_count} assets (${data.statement_date})`);
+            const accText = data.accounts && data.accounts.length > 0 ? ` across ${data.accounts_count} account(s) (${data.accounts.join(', ')})` : '';
+            const currText = data.currencies && data.currencies.length > 0 ? ` [${data.currencies.join(', ')}]` : '';
+            showToast(`✓ Statement uploaded! Parsed ${data.holdings_count} assets${accText}${currText} (${data.statement_date})`);
             fetchStatus();
         } catch (err) {
             showToast('Error: ' + err.message, true);
