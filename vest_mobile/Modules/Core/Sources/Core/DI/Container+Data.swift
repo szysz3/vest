@@ -20,4 +20,10 @@ public extension Container {
         self { BiometricRepositoryImpl() }
             .singleton
     }
+
+    var fixedAssetRepository: Factory<FixedAssetRepository> {
+        self { FixedAssetRepositoryImpl(httpClient: HTTPClient()) }
+            .singleton
+    }
 }
+

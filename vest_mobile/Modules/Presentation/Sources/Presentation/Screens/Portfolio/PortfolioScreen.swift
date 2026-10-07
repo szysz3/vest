@@ -2,13 +2,44 @@ import SwiftUI
 import Core
 import Domain
 
+import Factory
+
+public extension Notification.Name {
+    static let portfolioDidUpdate = Notification.Name("vest.portfolioDidUpdate")
+}
+
 struct PortfolioScreen: View {
     @StateObject var viewModel: PortfolioViewModel
+    @State private var showingAddAssetSheet = false
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.easeOut(duration: 0.4), value: viewModel.state.isLoaded)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingAddAssetSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityLabel("Add Fixed Asset")
+                }
+            }
+            .sheet(isPresented: $showingAddAssetSheet) {
+                FixedAssetSheet(
+                    viewModel: Container.shared.makeFixedAssetViewModel(mode: .add),
+                    onComplete: {
+                        NotificationCenter.default.post(name: .portfolioDidUpdate, object: nil)
+                        Task { await viewModel.load() }
+                    }
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .portfolioDidUpdate)) { _ in
+                Task { await viewModel.load() }
+            }
             .task {
                 await viewModel.loadIfNeeded()
             }
@@ -21,8 +52,10 @@ struct PortfolioScreen: View {
             ProgressView()
                 .transition(.opacity)
         case .loaded(let state):
-            PortfolioContent(state: state, syncStatus: viewModel.syncStatus)
-                .transition(.opacity.combined(with: .offset(y: 12)))
+            PortfolioContent(state: state, syncStatus: viewModel.syncStatus) {
+                await viewModel.load()
+            }
+            .transition(.opacity.combined(with: .offset(y: 12)))
         case .failed(let error):
             Text(error.localizedDescription)
                 .foregroundStyle(.secondary)
@@ -31,9 +64,11 @@ struct PortfolioScreen: View {
     }
 }
 
+
 private struct PortfolioContent: View {
     let state: PortfolioState
     let syncStatus: StatementSyncStatus?
+    var onRefresh: (() async -> Void)? = nil
     @State private var appeared = false
 
     var body: some View {
@@ -61,8 +96,12 @@ private struct PortfolioContent: View {
             .padding(.top, 12)
             .padding(.bottom, 36)
         }
+        .refreshable {
+            await onRefresh?()
+        }
         .background(VestGradientBackground())
         .environment(\.colorScheme, .dark)
+
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) {
                 appeared = true

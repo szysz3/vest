@@ -31,4 +31,29 @@ public extension Container {
             AuthenticateWithBiometricsUseCase(repository: self.biometricRepository())
         }
     }
+
+    var getFixedAssetsUseCase: Factory<GetFixedAssetsUseCaseProtocol> {
+        self {
+            GetFixedAssetsUseCase(repository: self.fixedAssetRepository())
+        }
+    }
+
+    var createFixedAssetUseCase: Factory<CreateFixedAssetUseCaseProtocol> {
+        self {
+            CreateFixedAssetUseCase(repository: self.fixedAssetRepository())
+        }
+    }
+
+    var updateFixedAssetUseCase: Factory<UpdateFixedAssetUseCaseProtocol> {
+        self {
+            UpdateFixedAssetUseCase(repository: self.fixedAssetRepository())
+        }
+    }
+
+    var deleteFixedAssetUseCase: Factory<DeleteFixedAssetUseCaseProtocol> {
+        self {
+            DeleteFixedAssetUseCase(repository: self.fixedAssetRepository())
+        }
+    }
 }
+

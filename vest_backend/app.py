@@ -98,6 +98,32 @@ class AssetDetailResponse(BaseModel):
     totalAmountPLN: float
     profitOrLossPLN: float
     accountNumber: Optional[str] = None
+    id: Optional[str] = None
+
+
+class FixedAssetCreate(BaseModel):
+    assetType: str
+    details: str
+    amount: float
+    currency: str = "PLN"
+
+
+class FixedAssetUpdate(BaseModel):
+    details: Optional[str] = None
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+
+
+class FixedAssetResponse(BaseModel):
+    id: str
+    assetType: str
+    details: str
+    amount: float
+    currency: str
+    amountPLN: float
+    createdAt: str
+    updatedAt: str
+
 
 
 class StatementSyncStatusResponse(BaseModel):
@@ -212,7 +238,21 @@ def init_db():
                     "INSERT INTO operators (id, name) VALUES (?, ?)",
                     (op["id"], op["name"]),
                 )
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fixed_assets (
+                id TEXT PRIMARY KEY,
+                asset_type TEXT NOT NULL,
+                details TEXT NOT NULL,
+                amount REAL NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'PLN',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
         conn.commit()
+
 
 
 @asynccontextmanager
@@ -529,6 +569,12 @@ async def get_portfolio_details():
             ORDER BY h.asset_type, h.details
         """).fetchall()
 
+        fixed_rows = conn.execute("""
+            SELECT id, asset_type, details, amount, currency
+            FROM fixed_assets
+            ORDER BY asset_type, details
+        """).fetchall()
+
     result = []
     for row in rows:
         currency = row["currency"] or "PLN"
@@ -558,6 +604,28 @@ async def get_portfolio_details():
             )
         )
 
+    for f_row in fixed_rows:
+        curr = (f_row["currency"] or "PLN").strip().upper()
+        fx = get_fx_rate(curr)
+        tot = round(f_row["amount"] or 0.0, 2)
+        tot_pln = round(tot * fx, 2)
+        result.append(
+            AssetDetailResponse(
+                assetType=f_row["asset_type"],
+                details=f_row["details"],
+                currency=curr,
+                nominalAmount=tot,
+                totalAmount=tot,
+                profitOrLoss=0.0,
+                profitOrLossPct=0.0,
+                nominalAmountPLN=tot_pln,
+                totalAmountPLN=tot_pln,
+                profitOrLossPLN=0.0,
+                accountNumber=f"fixed:{f_row['id']}",
+                id=f"fixed_{f_row['id']}",
+            )
+        )
+
     bonds = [r for r in result if r.assetType.lower() in ["bond", "bonds"]]
     bonds.sort(key=lambda r: parse_bond_maturity_key(r.details))
 
@@ -565,6 +633,126 @@ async def get_portfolio_details():
     non_bonds.sort(key=lambda r: (r.assetType, r.details))
 
     return bonds + non_bonds
+
+
+@app.get("/fixed-assets", response_model=list[FixedAssetResponse])
+@api_router.get("/fixed-assets", response_model=list[FixedAssetResponse])
+async def get_fixed_assets():
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM fixed_assets ORDER BY created_at DESC").fetchall()
+    result = []
+    for r in rows:
+        curr = (r["currency"] or "PLN").strip().upper()
+        fx = get_fx_rate(curr)
+        amt = round(r["amount"] or 0.0, 2)
+        amt_pln = round(amt * fx, 2)
+        result.append(
+            FixedAssetResponse(
+                id=r["id"],
+                assetType=r["asset_type"],
+                details=r["details"],
+                amount=amt,
+                currency=curr,
+                amountPLN=amt_pln,
+                createdAt=r["created_at"],
+                updatedAt=r["updated_at"],
+            )
+        )
+    return result
+
+
+@app.post("/fixed-assets", response_model=FixedAssetResponse)
+@api_router.post("/fixed-assets", response_model=FixedAssetResponse)
+async def create_fixed_asset(payload: FixedAssetCreate):
+    asset_type = payload.assetType.lower().strip()
+    if asset_type not in ["cash", "gold"]:
+        raise HTTPException(status_code=400, detail="assetType must be 'cash' or 'gold'")
+    if not payload.details.strip():
+        raise HTTPException(status_code=400, detail="details cannot be empty")
+    if payload.amount < 0:
+        raise HTTPException(status_code=400, detail="amount cannot be negative")
+
+    asset_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    curr = (payload.currency or "PLN").strip().upper()
+    amt = round(payload.amount, 2)
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO fixed_assets (id, asset_type, details, amount, currency, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (asset_id, asset_type, payload.details.strip(), amt, curr, now_iso, now_iso),
+        )
+        conn.commit()
+
+    fx = get_fx_rate(curr)
+    return FixedAssetResponse(
+        id=asset_id,
+        assetType=asset_type,
+        details=payload.details.strip(),
+        amount=amt,
+        currency=curr,
+        amountPLN=round(amt * fx, 2),
+        createdAt=now_iso,
+        updatedAt=now_iso,
+    )
+
+
+@app.put("/fixed-assets/{asset_id}", response_model=FixedAssetResponse)
+@api_router.put("/fixed-assets/{asset_id}", response_model=FixedAssetResponse)
+async def update_fixed_asset(asset_id: str, payload: FixedAssetUpdate):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM fixed_assets WHERE id = ?", (asset_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Fixed asset not found")
+
+        details = payload.details.strip() if payload.details is not None else row["details"]
+        if not details:
+            raise HTTPException(status_code=400, detail="details cannot be empty")
+
+        amount = round(payload.amount, 2) if payload.amount is not None else row["amount"]
+        if amount < 0:
+            raise HTTPException(status_code=400, detail="amount cannot be negative")
+
+        currency = payload.currency.strip().upper() if payload.currency is not None else row["currency"]
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        conn.execute(
+            """
+            UPDATE fixed_assets
+            SET details = ?, amount = ?, currency = ?, updated_at = ?
+            WHERE id = ?
+        """,
+            (details, amount, currency, now_iso, asset_id),
+        )
+        conn.commit()
+
+    fx = get_fx_rate(currency)
+    return FixedAssetResponse(
+        id=asset_id,
+        assetType=row["asset_type"],
+        details=details,
+        amount=amount,
+        currency=currency,
+        amountPLN=round(amount * fx, 2),
+        createdAt=row["created_at"],
+        updatedAt=now_iso,
+    )
+
+
+@app.delete("/fixed-assets/{asset_id}")
+@api_router.delete("/fixed-assets/{asset_id}")
+async def delete_fixed_asset(asset_id: str):
+    with get_db() as conn:
+        row = conn.execute("SELECT id FROM fixed_assets WHERE id = ?", (asset_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Fixed asset not found")
+        conn.execute("DELETE FROM fixed_assets WHERE id = ?", (asset_id,))
+        conn.commit()
+    return {"success": True, "id": asset_id}
+
 
 
 

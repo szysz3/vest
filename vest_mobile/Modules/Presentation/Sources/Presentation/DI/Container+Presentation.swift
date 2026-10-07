@@ -23,4 +23,26 @@ public extension Container {
     var lockViewModel: Factory<LockViewModel> {
         self { LockViewModel(authenticateWithBiometricsUseCase: self.authenticateWithBiometricsUseCase()) }
     }
+
+    @MainActor
+    func makeFixedAssetViewModel(
+        mode: FixedAssetViewModel.Mode = .add,
+        assetType: AssetType = .cash,
+        details: String = "",
+        amount: Double? = nil,
+        currency: String = "PLN"
+    ) -> FixedAssetViewModel {
+
+        FixedAssetViewModel(
+            mode: mode,
+            initialAssetType: assetType,
+            initialDetails: details,
+            initialAmount: amount,
+            initialCurrency: currency,
+            createFixedAssetUseCase: self.createFixedAssetUseCase(),
+            updateFixedAssetUseCase: self.updateFixedAssetUseCase(),
+            deleteFixedAssetUseCase: self.deleteFixedAssetUseCase()
+        )
+    }
 }
+
