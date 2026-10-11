@@ -26,6 +26,12 @@ public extension Container {
         }
     }
 
+    var getPortfolioHistoryUseCase: Factory<GetPortfolioHistoryUseCaseProtocol> {
+        self {
+            GetPortfolioHistoryUseCase(repository: self.transactionRepository())
+        }
+    }
+
     var authenticateWithBiometricsUseCase: Factory<AuthenticateWithBiometricsUseCaseProtocol> {
         self {
             AuthenticateWithBiometricsUseCase(repository: self.biometricRepository())

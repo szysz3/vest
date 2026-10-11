@@ -20,6 +20,14 @@ public extension Container {
         }
     }
 
+    var historyViewModel: Factory<HistoryViewModel> {
+        self {
+            HistoryViewModel(
+                getPortfolioHistoryUseCase: self.getPortfolioHistoryUseCase()
+            )
+        }
+    }
+
     var lockViewModel: Factory<LockViewModel> {
         self { LockViewModel(authenticateWithBiometricsUseCase: self.authenticateWithBiometricsUseCase()) }
     }

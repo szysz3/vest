@@ -43,6 +43,111 @@ public struct TransactionRepositoryImpl: TransactionRepository {
             missingSlots: remote.missingSlots
         )
     }
+
+    public func fetchPortfolioHistory() async throws -> PortfolioHistory {
+        let remote: PortfolioHistoryRemoteResponse = try await httpClient.request(path: "/portfolio/history")
+        return remote.toDomain()
+    }
+}
+
+private struct PortfolioHistoryRemoteResponse: Decodable {
+    let summary: PortfolioHistorySummaryRemoteResponse
+    let snapshots: [PortfolioSnapshotRemoteResponse]
+    let monthlySavings: [MonthlySavingRemoteResponse]
+    let yearlySavings: [YearlySavingRemoteResponse]
+
+    func toDomain() -> PortfolioHistory {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+
+        let domainSnapshots = snapshots.map { s in
+            let parsedDate = dateFormatter.date(from: s.date) ?? Date()
+            return PortfolioSnapshotPoint(
+                id: s.id,
+                date: parsedDate,
+                dateString: s.date,
+                totalAmount: s.totalAmount,
+                nominalAmount: s.nominalAmount,
+                amountSaved: s.amountSaved
+            )
+        }
+
+        let domainMonthly = monthlySavings.map { m in
+            MonthlySaving(
+                id: m.id,
+                year: m.year,
+                month: m.month,
+                label: m.label,
+                shortLabel: m.shortLabel,
+                amount: m.amount
+            )
+        }
+
+        let domainYearly = yearlySavings.map { y in
+            YearlySaving(
+                id: y.id,
+                year: y.year,
+                label: y.label,
+                amount: y.amount
+            )
+        }
+
+        return PortfolioHistory(
+            summary: summary.toDomain(),
+            snapshots: domainSnapshots,
+            monthlySavings: domainMonthly,
+            yearlySavings: domainYearly
+        )
+    }
+}
+
+private struct PortfolioHistorySummaryRemoteResponse: Decodable {
+    let currentTotal: Double
+    let startingTotal: Double
+    let totalSaved: Double
+    let totalGrowthPct: Double
+    let monthlyAverageSaved: Double
+    let yearlyAverageSaved: Double
+    let currentMonthSaved: Double
+    let currentYearSaved: Double
+
+    func toDomain() -> PortfolioHistorySummary {
+        PortfolioHistorySummary(
+            currentTotal: currentTotal,
+            startingTotal: startingTotal,
+            totalSaved: totalSaved,
+            totalGrowthPct: totalGrowthPct,
+            monthlyAverageSaved: monthlyAverageSaved,
+            yearlyAverageSaved: yearlyAverageSaved,
+            currentMonthSaved: currentMonthSaved,
+            currentYearSaved: currentYearSaved
+        )
+    }
+}
+
+private struct PortfolioSnapshotRemoteResponse: Decodable {
+    let id: String
+    let date: String
+    let totalAmount: Double
+    let nominalAmount: Double
+    let amountSaved: Double
+}
+
+private struct MonthlySavingRemoteResponse: Decodable {
+    let id: String
+    let year: Int
+    let month: Int
+    let label: String
+    let shortLabel: String
+    let amount: Double
+}
+
+private struct YearlySavingRemoteResponse: Decodable {
+    let id: String
+    let year: Int
+    let label: String
+    let amount: Double
 }
 
 private struct AssetDetailRemoteResponse: Decodable {

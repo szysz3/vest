@@ -5,10 +5,12 @@ public struct NavigationTabContainer: View {
     @State private var selectedTab: Tab = .portfolio
     private let portfolioViewModel: PortfolioViewModel
     private let detailsViewModel: DetailsViewModel
+    private let historyViewModel: HistoryViewModel
 
     public init() {
         self.portfolioViewModel = Container.shared.portfolioViewModel()
         self.detailsViewModel = Container.shared.detailsViewModel()
+        self.historyViewModel = Container.shared.historyViewModel()
     }
 
     public var body: some View {
@@ -34,6 +36,17 @@ public struct NavigationTabContainer: View {
             }
             .tabItem { Label(Tab.details.title, systemImage: Tab.details.icon) }
             .tag(Tab.details)
+
+            NavigationStack {
+                HistoryScreen(viewModel: historyViewModel)
+                    .navigationTitle(Tab.history.title)
+                    .preferredColorScheme(.dark)
+                    #if os(iOS)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
+                    #endif
+            }
+            .tabItem { Label(Tab.history.title, systemImage: Tab.history.icon) }
+            .tag(Tab.history)
         }
         #if os(iOS)
         .toolbarColorScheme(.dark, for: .tabBar)
@@ -45,11 +58,13 @@ extension NavigationTabContainer {
     enum Tab: Int {
         case portfolio
         case details
+        case history
 
         var title: String {
             switch self {
             case .portfolio: "Portfolio"
             case .details: "Details"
+            case .history: "History"
             }
         }
 
@@ -57,6 +72,7 @@ extension NavigationTabContainer {
             switch self {
             case .portfolio: "chart.pie.fill"
             case .details: "square.stack.3d.up"
+            case .history: "chart.line.uptrend.xyaxis"
             }
         }
     }
