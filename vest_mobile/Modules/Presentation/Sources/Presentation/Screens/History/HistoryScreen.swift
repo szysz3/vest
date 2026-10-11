@@ -244,7 +244,7 @@ private struct KPISavingsRow: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text(state.hasMultipleSnapshots ? "Avg: \(Int(state.yearlyAverage)) PLN/yr" : "Baseline year")
+                Text(state.hasMultipleSnapshots ? "Past 12 months" : "Baseline year")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
             }

@@ -1182,7 +1182,8 @@ async def get_portfolio_history():
     monthly_avg = round(tot_saved / len(monthly_savings), 2) if monthly_savings else 0.0
     yearly_avg = round(tot_saved / len(yearly_savings), 2) if yearly_savings else 0.0
     cur_month_saved = monthly_savings[-1].amount if monthly_savings else 0.0
-    cur_year_saved = yearly_savings[-1].amount if yearly_savings else 0.0
+    rolling_12_months = monthly_savings[-12:] if monthly_savings else []
+    cur_year_saved = round(sum(m.amount for m in rolling_12_months), 2)
 
     summary = PortfolioHistorySummary(
         currentTotal=cur_tot,
