@@ -27,7 +27,8 @@ public struct TransactionRepositoryImpl: TransactionRepository {
                 nominalAmountPLN: r.nominalAmountPLN ?? r.totalAmountPLN,
                 totalAmountPLN: r.totalAmountPLN,
                 profitOrLossPLN: r.profitOrLossPLN ?? 0.0,
-                accountNumber: r.accountNumber
+                accountNumber: r.accountNumber,
+                weightOz: r.weightOz
             )
         }
     }
@@ -56,6 +57,7 @@ private struct AssetDetailRemoteResponse: Decodable {
     let totalAmountPLN: Double
     let profitOrLossPLN: Double?
     let accountNumber: String?
+    let weightOz: Double?
 }
 
 private struct StatementSyncStatusRemoteResponse: Decodable {

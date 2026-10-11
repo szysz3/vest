@@ -10,6 +10,7 @@ struct EditableFixedAsset: Identifiable {
     let details: String
     let amount: Double
     let currency: String
+    let weightOz: Double?
 }
 
 struct DetailsScreen: View {
@@ -50,7 +51,8 @@ struct DetailsScreen: View {
                         assetType: asset.assetType,
                         details: asset.details,
                         amount: asset.amount,
-                        currency: asset.currency
+                        currency: asset.currency,
+                        weightOz: asset.weightOz
                     ),
                     onComplete: {
                         NotificationCenter.default.post(name: .portfolioDidUpdate, object: nil)
@@ -243,7 +245,14 @@ private struct DetailsItemRow: View {
                                 .foregroundStyle(color.opacity(0.6))
                         }
                     }
-                    
+
+                    if item.assetType == .gold, let weight = item.weightOz, weight > 0 {
+                        let formattedWeight = weight.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", weight) : String(format: "%.3f", weight)
+                        Text("\(formattedWeight) oz")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(color)
+                    }
+
                     if item.assetType == .bond, let maturity = bondMaturityLabel(for: item.details) {
                         Text("Maturity: \(maturity)")
                             .font(.caption2)
@@ -297,12 +306,14 @@ private struct DetailsItemRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if let fixedId = fixedAssetId {
+                let costBasis = (item.nominalAmount > 0 && item.nominalAmount != item.totalAmount) ? item.nominalAmount : (item.assetType == .gold ? 0.0 : item.totalAmount)
                 onEdit?(EditableFixedAsset(
                     id: fixedId,
                     assetType: item.assetType,
                     details: item.details,
-                    amount: item.totalAmount,
-                    currency: item.currency
+                    amount: costBasis,
+                    currency: item.currency,
+                    weightOz: item.weightOz
                 ))
             }
         }
@@ -315,12 +326,14 @@ private struct DetailsItemRow: View {
                 }
 
                 Button {
+                    let costBasis = (item.nominalAmount > 0 && item.nominalAmount != item.totalAmount) ? item.nominalAmount : (item.assetType == .gold ? 0.0 : item.totalAmount)
                     onEdit?(EditableFixedAsset(
                         id: fixedId,
                         assetType: item.assetType,
                         details: item.details,
-                        amount: item.totalAmount,
-                        currency: item.currency
+                        amount: costBasis,
+                        currency: item.currency,
+                        weightOz: item.weightOz
                     ))
                 } label: {
                     Label("Edit", systemImage: "pencil")

@@ -47,6 +47,7 @@ public struct AssetDetail: Identifiable, Equatable, Sendable {
     public let totalAmountPLN: Double
     public let profitOrLossPLN: Double
     public let accountNumber: String?
+    public let weightOz: Double?
 
     public init(
         assetType: AssetType,
@@ -59,7 +60,8 @@ public struct AssetDetail: Identifiable, Equatable, Sendable {
         nominalAmountPLN: Double,
         totalAmountPLN: Double,
         profitOrLossPLN: Double,
-        accountNumber: String? = nil
+        accountNumber: String? = nil,
+        weightOz: Double? = nil
     ) {
         self.id = "\(assetType.rawValue)_\(details)_\(currency)"
         self.assetType = assetType
@@ -73,5 +75,6 @@ public struct AssetDetail: Identifiable, Equatable, Sendable {
         self.totalAmountPLN = totalAmountPLN
         self.profitOrLossPLN = profitOrLossPLN
         self.accountNumber = accountNumber
+        self.weightOz = weightOz
     }
 }

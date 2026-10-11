@@ -18,7 +18,8 @@ private final class StubFixedAssetRepository: FixedAssetRepository, @unchecked S
             details: draft.details,
             amount: draft.amount,
             currency: draft.currency,
-            amountPLN: draft.amount
+            amountPLN: draft.amount,
+            weightOz: draft.weightOz
         )
         assets.append(asset)
         return asset
@@ -31,7 +32,8 @@ private final class StubFixedAssetRepository: FixedAssetRepository, @unchecked S
             details: draft.details,
             amount: draft.amount,
             currency: draft.currency,
-            amountPLN: draft.amount
+            amountPLN: draft.amount,
+            weightOz: draft.weightOz
         )
         return updated
     }
@@ -128,5 +130,62 @@ struct FixedAssetViewModelTests {
         #expect(success)
         #expect(repo.deletedId == "asset_delete")
         #expect(repo.assets.isEmpty)
+    }
+
+    @Test func addModeGoldWithWeightValidationAndSave() async throws {
+        let repo = StubFixedAssetRepository()
+        let createUseCase = CreateFixedAssetUseCase(repository: repo)
+        let updateUseCase = UpdateFixedAssetUseCase(repository: repo)
+        let deleteUseCase = DeleteFixedAssetUseCase(repository: repo)
+
+        let vm = FixedAssetViewModel(
+            createFixedAssetUseCase: createUseCase,
+            updateFixedAssetUseCase: updateUseCase,
+            deleteFixedAssetUseCase: deleteUseCase
+        )
+
+        vm.assetType = .gold
+        vm.details = "1 oz Vienna Philharmonic"
+        #expect(!vm.isFormValid) // Not valid without weight
+
+        vm.weightOzText = "1"
+        #expect(vm.isFormValid) // Valid with weight and no amount
+        #expect(vm.parsedWeightOz == 1.0)
+
+        vm.amountText = "10500"
+        #expect(vm.isFormValid) // Valid with weight and purchase cost
+
+        let success = await vm.save()
+        #expect(success)
+        #expect(repo.assets.count == 1)
+        #expect(repo.assets.first?.weightOz == 1.0)
+        #expect(repo.assets.first?.amount == 10500.0)
+    }
+
+    @Test func editModeGoldPrepopulatesWeight() async throws {
+        let repo = StubFixedAssetRepository()
+        let createUseCase = CreateFixedAssetUseCase(repository: repo)
+        let updateUseCase = UpdateFixedAssetUseCase(repository: repo)
+        let deleteUseCase = DeleteFixedAssetUseCase(repository: repo)
+
+        let vm = FixedAssetViewModel(
+            mode: .edit(id: "gold_1"),
+            initialAssetType: .gold,
+            initialDetails: "Half Ounce Bar",
+            initialAmount: 5000.0,
+            initialCurrency: "PLN",
+            initialWeightOz: 0.5,
+            createFixedAssetUseCase: createUseCase,
+            updateFixedAssetUseCase: updateUseCase,
+            deleteFixedAssetUseCase: deleteUseCase
+        )
+
+        #expect(vm.weightOzText == "0.5")
+        #expect(vm.parsedWeightOz == 0.5)
+        #expect(vm.isFormValid)
+
+        vm.weightOzText = "1"
+        let success = await vm.save()
+        #expect(success)
     }
 }

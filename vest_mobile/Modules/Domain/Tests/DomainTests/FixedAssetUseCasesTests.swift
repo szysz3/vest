@@ -17,7 +17,8 @@ final class MockFixedAssetRepository: FixedAssetRepository, @unchecked Sendable 
             details: draft.details,
             amount: draft.amount,
             currency: draft.currency,
-            amountPLN: draft.amount
+            amountPLN: draft.amount,
+            weightOz: draft.weightOz
         )
         assets.append(asset)
         return asset
@@ -33,7 +34,8 @@ final class MockFixedAssetRepository: FixedAssetRepository, @unchecked Sendable 
             details: draft.details,
             amount: draft.amount,
             currency: draft.currency,
-            amountPLN: draft.amount
+            amountPLN: draft.amount,
+            weightOz: draft.weightOz
         )
         assets[index] = updated
         return updated
@@ -93,5 +95,27 @@ struct FixedAssetUseCasesTests {
         try await deleteUseCase.execute(id: created.id)
         #expect(repo.didDeleteId == created.id)
         #expect(repo.assets.isEmpty)
+    }
+
+    @Test func createGoldFixedAssetWithWeightSuccess() async throws {
+        let repo = MockFixedAssetRepository()
+        let createUseCase = CreateFixedAssetUseCase(repository: repo)
+
+        let draft = FixedAssetDraft(assetType: .gold, details: "1 oz Maple Leaf", amount: 11000, currency: "PLN", weightOz: 1.0)
+        let asset = try await createUseCase.execute(draft)
+
+        #expect(asset.details == "1 oz Maple Leaf")
+        #expect(asset.weightOz == 1.0)
+        #expect(asset.amount == 11000)
+    }
+
+    @Test func goldNegativeWeightValidationError() async throws {
+        let repo = MockFixedAssetRepository()
+        let createUseCase = CreateFixedAssetUseCase(repository: repo)
+
+        let draft = FixedAssetDraft(assetType: .gold, details: "Invalid Bar", amount: 1000, currency: "PLN", weightOz: -0.5)
+        await #expect(throws: DomainError.self) {
+            try await createUseCase.execute(draft)
+        }
     }
 }

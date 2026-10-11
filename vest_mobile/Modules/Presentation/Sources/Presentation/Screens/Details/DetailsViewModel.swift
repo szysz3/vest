@@ -41,7 +41,8 @@ public final class DetailsViewModel: ObservableObject {
                                 nominalAmountPLN: detail.nominalAmountPLN,
                                 totalAmountPLN: detail.totalAmountPLN,
                                 profitOrLossPLN: detail.profitOrLossPLN,
-                                accountNumber: detail.accountNumber
+                                accountNumber: detail.accountNumber,
+                                weightOz: detail.weightOz
                             )
                         }.sorted { item1, item2 in
                             if assetType == .bond {
@@ -115,5 +116,6 @@ public struct DetailsState: Equatable, Sendable {
         public let totalAmountPLN: Double
         public let profitOrLossPLN: Double
         public let accountNumber: String?
+        public let weightOz: Double?
     }
 }

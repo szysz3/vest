@@ -30,6 +30,8 @@ DEFAULT_OPERATORS = [
 ]
 
 FX_RATE_CACHE = {}
+GOLD_PRICE_CACHE = {}
+TROY_OUNCE_IN_GRAMS = 31.1034768
 
 
 def get_configured_operators() -> List[dict]:
@@ -75,6 +77,66 @@ def get_fx_rate(currency: str) -> float:
     return rate
 
 
+def get_gold_price(currency: str = "PLN") -> Tuple[float, float, str]:
+    """
+    Returns (price_per_oz, price_per_g, date_str) in the requested currency.
+    Uses official NBP API (http://api.nbp.pl/api/cenyzlota/?format=json) which publishes
+    the gold price per 1 gram of pure gold in PLN.
+    Converts 1 troy oz = 31.1034768 g, then applies FX rate for other currencies.
+    Caches results per calendar date and currency to save API calls.
+    """
+    curr = (currency or "PLN").strip().upper()
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    cache_key = f"{today_str}:{curr}"
+    if cache_key in GOLD_PRICE_CACHE:
+        return GOLD_PRICE_CACHE[cache_key]
+
+    base_cache_key = f"{today_str}:PLN"
+    price_g_pln = None
+    date_str = today_str
+
+    if base_cache_key in GOLD_PRICE_CACHE:
+        _, price_g_pln, date_str = GOLD_PRICE_CACHE[base_cache_key]
+    else:
+        url = "http://api.nbp.pl/api/cenyzlota/?format=json"
+        req = urllib.request.Request(url, headers={"User-Agent": "VestBackend/1.0", "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data and isinstance(data, list) and len(data) > 0:
+                    price_g_pln = float(data[0].get("cena", 0.0))
+                    date_str = str(data[0].get("data", today_str))
+                    if price_g_pln > 0:
+                        GOLD_PRICE_CACHE[base_cache_key] = (
+                            round(price_g_pln * TROY_OUNCE_IN_GRAMS, 2),
+                            round(price_g_pln, 2),
+                            date_str,
+                        )
+        except Exception as e:
+            print(f"Warning: Failed to fetch live NBP gold price: {e}")
+
+    # Fallback if NBP is unreachable: ~520.0 PLN/g
+    if not price_g_pln or price_g_pln <= 0:
+        price_g_pln = 520.0
+        date_str = today_str
+
+    price_oz_pln = price_g_pln * TROY_OUNCE_IN_GRAMS
+
+    if curr == "PLN":
+        res = (round(price_oz_pln, 2), round(price_g_pln, 2), date_str)
+        GOLD_PRICE_CACHE[cache_key] = res
+        return res
+
+    fx_rate = get_fx_rate(curr)
+    price_oz_curr = price_oz_pln / fx_rate if fx_rate > 0 else price_oz_pln
+    price_g_curr = price_g_pln / fx_rate if fx_rate > 0 else price_g_pln
+
+    res = (round(price_oz_curr, 2), round(price_g_curr, 2), date_str)
+    GOLD_PRICE_CACHE[cache_key] = res
+    return res
+
+
 def is_statement_stale(stmt_date_str: str, threshold_days: int = 30) -> Tuple[bool, int]:
     """Returns (is_stale, age_in_days). Statement is stale if age > threshold_days (30 days)."""
     try:
@@ -99,19 +161,22 @@ class AssetDetailResponse(BaseModel):
     profitOrLossPLN: float
     accountNumber: Optional[str] = None
     id: Optional[str] = None
+    weightOz: Optional[float] = None
 
 
 class FixedAssetCreate(BaseModel):
     assetType: str
     details: str
-    amount: float
+    amount: float = 0.0
     currency: str = "PLN"
+    weightOz: Optional[float] = None
 
 
 class FixedAssetUpdate(BaseModel):
     details: Optional[str] = None
     amount: Optional[float] = None
     currency: Optional[str] = None
+    weightOz: Optional[float] = None
 
 
 class FixedAssetResponse(BaseModel):
@@ -121,8 +186,16 @@ class FixedAssetResponse(BaseModel):
     amount: float
     currency: str
     amountPLN: float
+    weightOz: Optional[float] = None
     createdAt: str
     updatedAt: str
+
+
+class GoldPriceResponse(BaseModel):
+    date: str
+    currency: str
+    pricePerGram: float
+    pricePerOz: float
 
 
 
@@ -246,10 +319,16 @@ def init_db():
                 details TEXT NOT NULL,
                 amount REAL NOT NULL,
                 currency TEXT NOT NULL DEFAULT 'PLN',
+                weight_oz REAL DEFAULT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
         """)
+
+        cursor = conn.execute("PRAGMA table_info(fixed_assets)")
+        fixed_cols = [row["name"] for row in cursor.fetchall()]
+        if "weight_oz" not in fixed_cols:
+            conn.execute("ALTER TABLE fixed_assets ADD COLUMN weight_oz REAL DEFAULT NULL")
 
         conn.commit()
 
@@ -570,7 +649,7 @@ async def get_portfolio_details():
         """).fetchall()
 
         fixed_rows = conn.execute("""
-            SELECT id, asset_type, details, amount, currency
+            SELECT id, asset_type, details, amount, currency, weight_oz
             FROM fixed_assets
             ORDER BY asset_type, details
         """).fetchall()
@@ -607,24 +686,61 @@ async def get_portfolio_details():
     for f_row in fixed_rows:
         curr = (f_row["currency"] or "PLN").strip().upper()
         fx = get_fx_rate(curr)
-        tot = round(f_row["amount"] or 0.0, 2)
-        tot_pln = round(tot * fx, 2)
-        result.append(
-            AssetDetailResponse(
-                assetType=f_row["asset_type"],
-                details=f_row["details"],
-                currency=curr,
-                nominalAmount=tot,
-                totalAmount=tot,
-                profitOrLoss=0.0,
-                profitOrLossPct=0.0,
-                nominalAmountPLN=tot_pln,
-                totalAmountPLN=tot_pln,
-                profitOrLossPLN=0.0,
-                accountNumber=f"fixed:{f_row['id']}",
-                id=f"fixed_{f_row['id']}",
+        f_type = (f_row["asset_type"] or "").lower().strip()
+        weight_oz = f_row["weight_oz"] if "weight_oz" in f_row.keys() else None
+
+        if f_type == "gold" and weight_oz is not None and weight_oz > 0:
+            spot_oz, _, _ = get_gold_price(curr)
+            tot = round(weight_oz * spot_oz, 2)
+            cost_basis = round(f_row["amount"] or 0.0, 2)
+            if cost_basis > 0:
+                nom = cost_basis
+                prof = round(tot - nom, 2)
+                pct = round((prof / nom * 100.0), 2)
+            else:
+                nom = tot
+                prof = 0.0
+                pct = 0.0
+            nom_pln = round(nom * fx, 2)
+            tot_pln = round(tot * fx, 2)
+            prof_pln = round(prof * fx, 2)
+            result.append(
+                AssetDetailResponse(
+                    assetType=f_row["asset_type"],
+                    details=f_row["details"],
+                    currency=curr,
+                    nominalAmount=nom,
+                    totalAmount=tot,
+                    profitOrLoss=prof,
+                    profitOrLossPct=pct,
+                    nominalAmountPLN=nom_pln,
+                    totalAmountPLN=tot_pln,
+                    profitOrLossPLN=prof_pln,
+                    accountNumber=f"fixed:{f_row['id']}",
+                    id=f"fixed_{f_row['id']}",
+                    weightOz=weight_oz,
+                )
             )
-        )
+        else:
+            tot = round(f_row["amount"] or 0.0, 2)
+            tot_pln = round(tot * fx, 2)
+            result.append(
+                AssetDetailResponse(
+                    assetType=f_row["asset_type"],
+                    details=f_row["details"],
+                    currency=curr,
+                    nominalAmount=tot,
+                    totalAmount=tot,
+                    profitOrLoss=0.0,
+                    profitOrLossPct=0.0,
+                    nominalAmountPLN=tot_pln,
+                    totalAmountPLN=tot_pln,
+                    profitOrLossPLN=0.0,
+                    accountNumber=f"fixed:{f_row['id']}",
+                    id=f"fixed_{f_row['id']}",
+                    weightOz=weight_oz,
+                )
+            )
 
     bonds = [r for r in result if r.assetType.lower() in ["bond", "bonds"]]
     bonds.sort(key=lambda r: parse_bond_maturity_key(r.details))
@@ -646,6 +762,7 @@ async def get_fixed_assets():
         fx = get_fx_rate(curr)
         amt = round(r["amount"] or 0.0, 2)
         amt_pln = round(amt * fx, 2)
+        w_oz = r["weight_oz"] if "weight_oz" in r.keys() else None
         result.append(
             FixedAssetResponse(
                 id=r["id"],
@@ -654,6 +771,7 @@ async def get_fixed_assets():
                 amount=amt,
                 currency=curr,
                 amountPLN=amt_pln,
+                weightOz=w_oz,
                 createdAt=r["created_at"],
                 updatedAt=r["updated_at"],
             )
@@ -672,6 +790,10 @@ async def create_fixed_asset(payload: FixedAssetCreate):
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount cannot be negative")
 
+    weight_oz = round(payload.weightOz, 4) if payload.weightOz is not None else None
+    if asset_type == "gold" and weight_oz is not None and weight_oz <= 0:
+        raise HTTPException(status_code=400, detail="weightOz must be greater than 0")
+
     asset_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
     curr = (payload.currency or "PLN").strip().upper()
@@ -680,10 +802,10 @@ async def create_fixed_asset(payload: FixedAssetCreate):
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO fixed_assets (id, asset_type, details, amount, currency, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO fixed_assets (id, asset_type, details, amount, currency, weight_oz, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (asset_id, asset_type, payload.details.strip(), amt, curr, now_iso, now_iso),
+            (asset_id, asset_type, payload.details.strip(), amt, curr, weight_oz, now_iso, now_iso),
         )
         conn.commit()
 
@@ -695,6 +817,7 @@ async def create_fixed_asset(payload: FixedAssetCreate):
         amount=amt,
         currency=curr,
         amountPLN=round(amt * fx, 2),
+        weightOz=weight_oz,
         createdAt=now_iso,
         updatedAt=now_iso,
     )
@@ -717,15 +840,19 @@ async def update_fixed_asset(asset_id: str, payload: FixedAssetUpdate):
             raise HTTPException(status_code=400, detail="amount cannot be negative")
 
         currency = payload.currency.strip().upper() if payload.currency is not None else row["currency"]
+        weight_oz = round(payload.weightOz, 4) if payload.weightOz is not None else (row["weight_oz"] if "weight_oz" in row.keys() else None)
+        if row["asset_type"] == "gold" and weight_oz is not None and weight_oz <= 0:
+            raise HTTPException(status_code=400, detail="weightOz must be greater than 0")
+
         now_iso = datetime.now(timezone.utc).isoformat()
 
         conn.execute(
             """
             UPDATE fixed_assets
-            SET details = ?, amount = ?, currency = ?, updated_at = ?
+            SET details = ?, amount = ?, currency = ?, weight_oz = ?, updated_at = ?
             WHERE id = ?
         """,
-            (details, amount, currency, now_iso, asset_id),
+            (details, amount, currency, weight_oz, now_iso, asset_id),
         )
         conn.commit()
 
@@ -737,6 +864,7 @@ async def update_fixed_asset(asset_id: str, payload: FixedAssetUpdate):
         amount=amount,
         currency=currency,
         amountPLN=round(amount * fx, 2),
+        weightOz=weight_oz,
         createdAt=row["created_at"],
         updatedAt=now_iso,
     )
@@ -752,6 +880,19 @@ async def delete_fixed_asset(asset_id: str):
         conn.execute("DELETE FROM fixed_assets WHERE id = ?", (asset_id,))
         conn.commit()
     return {"success": True, "id": asset_id}
+
+
+@app.get("/market/gold-price", response_model=GoldPriceResponse)
+@api_router.get("/market/gold-price", response_model=GoldPriceResponse)
+async def get_market_gold_price(currency: str = "PLN"):
+    curr = (currency or "PLN").strip().upper()
+    price_oz, price_g, date_str = get_gold_price(curr)
+    return GoldPriceResponse(
+        date=date_str,
+        currency=curr,
+        pricePerGram=price_g,
+        pricePerOz=price_oz,
+    )
 
 
 

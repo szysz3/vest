@@ -7,6 +7,7 @@ public struct FixedAsset: Identifiable, Equatable, Sendable, Codable {
     public let amount: Double
     public let currency: String
     public let amountPLN: Double
+    public let weightOz: Double?
 
     public init(
         id: String,
@@ -14,7 +15,8 @@ public struct FixedAsset: Identifiable, Equatable, Sendable, Codable {
         details: String,
         amount: Double,
         currency: String,
-        amountPLN: Double
+        amountPLN: Double,
+        weightOz: Double? = nil
     ) {
         self.id = id
         self.assetType = assetType
@@ -22,6 +24,7 @@ public struct FixedAsset: Identifiable, Equatable, Sendable, Codable {
         self.amount = amount
         self.currency = currency
         self.amountPLN = amountPLN
+        self.weightOz = weightOz
     }
 }
 
@@ -30,16 +33,19 @@ public struct FixedAssetDraft: Equatable, Sendable, Codable {
     public let details: String
     public let amount: Double
     public let currency: String
+    public let weightOz: Double?
 
     public init(
         assetType: AssetType,
         details: String,
         amount: Double,
-        currency: String
+        currency: String,
+        weightOz: Double? = nil
     ) {
         self.assetType = assetType
         self.details = details
         self.amount = amount
         self.currency = currency
+        self.weightOz = weightOz
     }
 }

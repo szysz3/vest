@@ -26,6 +26,7 @@ public final class FixedAssetViewModel: ObservableObject {
     @Published public var assetType: AssetType = .cash
     @Published public var details: String = ""
     @Published public var amountText: String = ""
+    @Published public var weightOzText: String = ""
     @Published public var currency: String = "PLN"
     @Published public var isSaving: Bool = false
     @Published public var errorMessage: String? = nil
@@ -41,6 +42,7 @@ public final class FixedAssetViewModel: ObservableObject {
         initialDetails: String = "",
         initialAmount: Double? = nil,
         initialCurrency: String = "PLN",
+        initialWeightOz: Double? = nil,
         createFixedAssetUseCase: CreateFixedAssetUseCaseProtocol,
         updateFixedAssetUseCase: UpdateFixedAssetUseCaseProtocol,
         deleteFixedAssetUseCase: DeleteFixedAssetUseCaseProtocol
@@ -52,6 +54,18 @@ public final class FixedAssetViewModel: ObservableObject {
             self.amountText = initialAmount > 0 ? String(format: "%.2f", initialAmount).replacingOccurrences(of: ".00", with: "") : ""
         } else {
             self.amountText = ""
+        }
+        if let initialWeightOz, initialWeightOz > 0 {
+            if initialWeightOz.truncatingRemainder(dividingBy: 1) == 0 {
+                self.weightOzText = String(format: "%.0f", initialWeightOz)
+            } else {
+                let formatted = String(format: "%.4f", initialWeightOz)
+                    .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
+                    .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
+                self.weightOzText = formatted
+            }
+        } else {
+            self.weightOzText = ""
         }
         self.currency = initialCurrency
         self.createFixedAssetUseCase = createFixedAssetUseCase
@@ -68,14 +82,36 @@ public final class FixedAssetViewModel: ObservableObject {
         return value
     }
 
+    public var parsedWeightOz: Double? {
+        let normalized = weightOzText
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(normalized), value > 0 else { return nil }
+        return value
+    }
+
     public var isFormValid: Bool {
         guard !details.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        guard let amount = parsedAmount, amount >= 0 else { return false }
-        return true
+        if assetType == .gold {
+            if let weight = parsedWeightOz, weight > 0 {
+                if amountText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    return true
+                }
+                guard let amount = parsedAmount, amount >= 0 else { return false }
+                return true
+            } else if let amount = parsedAmount, amount > 0 {
+                return true
+            }
+            return false
+        } else {
+            guard let amount = parsedAmount, amount >= 0 else { return false }
+            return true
+        }
     }
 
     public func save() async -> Bool {
-        guard isFormValid, let amount = parsedAmount else { return false }
+        guard isFormValid else { return false }
+        let amount = parsedAmount ?? 0.0
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -84,7 +120,8 @@ public final class FixedAssetViewModel: ObservableObject {
             assetType: assetType,
             details: details.trimmingCharacters(in: .whitespaces),
             amount: amount,
-            currency: currency
+            currency: currency,
+            weightOz: assetType == .gold ? parsedWeightOz : nil
         )
 
         do {

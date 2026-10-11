@@ -27,6 +27,10 @@ public struct FixedAssetSheet: View {
 
                     nameSection
 
+                    if viewModel.assetType == .gold {
+                        weightSection
+                    }
+
                     amountSection
 
                     currencySection
@@ -188,11 +192,81 @@ public struct FixedAssetSheet: View {
         }
     }
 
-    private var amountSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Current Value")
+    private var weightSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Weight (oz)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.6))
+
+            HStack(spacing: 8) {
+                TextField("e.g. 1.0", text: $viewModel.weightOzText)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    #if os(iOS)
+                    .keyboardType(.decimalPad)
+                    #endif
+
+                Text("oz")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(activeColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(activeColor.opacity(0.15))
+                    )
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+
+            HStack(spacing: 8) {
+                presetWeightButton(title: "1 oz", weight: "1")
+                presetWeightButton(title: "1/2 oz", weight: "0.5")
+                presetWeightButton(title: "1/4 oz", weight: "0.25")
+                presetWeightButton(title: "1/10 oz", weight: "0.1")
+            }
+        }
+    }
+
+    private func presetWeightButton(title: String, weight: String) -> some View {
+        let isSelected = viewModel.weightOzText == weight
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                viewModel.weightOzText = weight
+            }
+        } label: {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(isSelected ? .black : .white.opacity(0.7))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isSelected ? activeColor : Color.white.opacity(0.06))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var amountSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(viewModel.assetType == .gold ? "Purchase Cost (Optional)" : "Current Value")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                Spacer()
+                if viewModel.assetType == .gold {
+                    Text("to track profit/loss")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+            }
 
             HStack(spacing: 8) {
                 TextField("0.00", text: $viewModel.amountText)

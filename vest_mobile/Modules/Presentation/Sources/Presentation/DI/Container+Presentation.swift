@@ -30,7 +30,8 @@ public extension Container {
         assetType: AssetType = .cash,
         details: String = "",
         amount: Double? = nil,
-        currency: String = "PLN"
+        currency: String = "PLN",
+        weightOz: Double? = nil
     ) -> FixedAssetViewModel {
 
         FixedAssetViewModel(
@@ -39,6 +40,7 @@ public extension Container {
             initialDetails: details,
             initialAmount: amount,
             initialCurrency: currency,
+            initialWeightOz: weightOz,
             createFixedAssetUseCase: self.createFixedAssetUseCase(),
             updateFixedAssetUseCase: self.updateFixedAssetUseCase(),
             deleteFixedAssetUseCase: self.deleteFixedAssetUseCase()

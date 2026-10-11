@@ -33,6 +33,11 @@ public struct CreateFixedAssetUseCase: CreateFixedAssetUseCaseProtocol {
         guard !draft.details.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw DomainError.validationError("Asset name cannot be empty")
         }
+        if draft.assetType == .gold, let weight = draft.weightOz {
+            guard weight > 0 else {
+                throw DomainError.validationError("Weight must be greater than 0")
+            }
+        }
         guard draft.amount >= 0 else {
             throw DomainError.validationError("Amount cannot be negative")
         }
@@ -55,6 +60,11 @@ public struct UpdateFixedAssetUseCase: UpdateFixedAssetUseCaseProtocol {
     public func execute(id: String, draft: FixedAssetDraft) async throws -> FixedAsset {
         guard !draft.details.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw DomainError.validationError("Asset name cannot be empty")
+        }
+        if draft.assetType == .gold, let weight = draft.weightOz {
+            guard weight > 0 else {
+                throw DomainError.validationError("Weight must be greater than 0")
+            }
         }
         guard draft.amount >= 0 else {
             throw DomainError.validationError("Amount cannot be negative")
