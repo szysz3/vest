@@ -1089,7 +1089,7 @@ async def get_transactions():
 
 @app.get("/portfolio/history", response_model=PortfolioHistoryResponse)
 @api_router.get("/portfolio/history", response_model=PortfolioHistoryResponse)
-async def get_portfolio_history(include_synthetic: bool = True):
+async def get_portfolio_history():
     with get_db() as conn:
         snapshots_rows = conn.execute("""
             SELECT id, snapshot_date, total_amount_pln, nominal_amount_pln, profit_or_loss_pln, amount_saved_pln
@@ -1118,40 +1118,6 @@ async def get_portfolio_history(include_synthetic: bool = True):
             )
         )
 
-    if len(snapshots) < 2 and snapshots and include_synthetic:
-        latest = snapshots[-1]
-        try:
-            latest_date = datetime.strptime(latest.date, "%Y-%m-%d")
-        except ValueError:
-            latest_date = datetime.now()
-
-        months_back = 12
-        base_val = max(round(latest.totalAmount * 0.72, 2), 1000.0)
-        total_growth = latest.totalAmount - base_val
-        monthly_growth = total_growth / months_back
-
-        synthetic_points = []
-        for i in range(months_back, 0, -1):
-            m_idx = latest_date.month - i
-            y = latest_date.year
-            while m_idx <= 0:
-                m_idx += 12
-                y -= 1
-            d_str = f"{y:04d}-{m_idx:02d}-28"
-            cur_tot = round(base_val + monthly_growth * (months_back - i), 2)
-            cur_nom = round(cur_tot * 0.95, 2)
-            cur_saved = round(monthly_growth * 0.85, 2)
-            synthetic_points.append(
-                PortfolioSnapshotPoint(
-                    id=f"synth_{y}_{m_idx}",
-                    date=d_str,
-                    totalAmount=cur_tot,
-                    nominalAmount=cur_nom,
-                    amountSaved=cur_saved,
-                )
-            )
-        snapshots = synthetic_points + snapshots
-
     month_map = {}
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -1167,7 +1133,7 @@ async def get_portfolio_history(include_synthetic: bool = True):
         elif i > 0:
             saved_val = max(0.0, round(s.nominalAmount - snapshots[i - 1].nominalAmount, 2))
         else:
-            saved_val = round(s.nominalAmount * 0.03, 2)
+            saved_val = s.amountSaved
 
         month_map[key] = {
             "year": y,
@@ -1211,7 +1177,7 @@ async def get_portfolio_history(include_synthetic: bool = True):
     cur_tot = snapshots[-1].totalAmount if snapshots else 0.0
     start_tot = snapshots[0].totalAmount if snapshots else 0.0
     tot_saved = sum(m.amount for m in monthly_savings)
-    growth_pct = round(((cur_tot - start_tot) / start_tot * 100.0), 2) if start_tot > 0 else 0.0
+    growth_pct = round(((cur_tot - start_tot) / start_tot * 100.0), 2) if (start_tot > 0 and len(snapshots) > 1) else 0.0
 
     monthly_avg = round(tot_saved / len(monthly_savings), 2) if monthly_savings else 0.0
     yearly_avg = round(tot_saved / len(yearly_savings), 2) if yearly_savings else 0.0
@@ -1244,51 +1210,6 @@ async def force_portfolio_snapshot(date: Optional[str] = None):
         record_portfolio_snapshot(conn, snapshot_date=date)
         conn.commit()
     return {"success": True, "message": "Snapshot recorded successfully"}
-
-
-@app.post("/portfolio/history/seed-demo")
-@api_router.post("/portfolio/history/seed-demo")
-async def seed_demo_history():
-    with get_db() as conn:
-        now = datetime.now()
-        cur_tot, cur_nom, cur_prof = calculate_current_portfolio_valuation(conn)
-        if cur_tot <= 0:
-            cur_tot = 125000.0
-            cur_nom = 115000.0
-            cur_prof = 10000.0
-
-        base_nom = cur_nom * 0.70
-        base_tot = cur_tot * 0.68
-        step_tot = (cur_tot - base_tot) / 12
-        step_nom = (cur_nom - base_nom) / 12
-
-        for i in range(12, -1, -1):
-            m = now.month - i
-            y = now.year
-            while m <= 0:
-                m += 12
-                y -= 1
-            d_str = f"{y:04d}-{m:02d}-28"
-            t_amt = round(base_tot + step_tot * (12 - i), 2)
-            n_amt = round(base_nom + step_nom * (12 - i), 2)
-            p_amt = round(t_amt - n_amt, 2)
-            s_amt = round(step_nom, 2) if i < 12 else 0.0
-
-            existing = conn.execute("SELECT id FROM portfolio_snapshots WHERE snapshot_date = ?", (d_str,)).fetchone()
-            if existing:
-                conn.execute("""
-                    UPDATE portfolio_snapshots
-                    SET total_amount_pln = ?, nominal_amount_pln = ?, profit_or_loss_pln = ?, amount_saved_pln = ?
-                    WHERE id = ?
-                """, (t_amt, n_amt, p_amt, s_amt, existing["id"]))
-            else:
-                conn.execute("""
-                    INSERT INTO portfolio_snapshots (id, snapshot_date, total_amount_pln, nominal_amount_pln, profit_or_loss_pln, amount_saved_pln, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (str(uuid.uuid4()), d_str, t_amt, n_amt, p_amt, s_amt, datetime.now(timezone.utc).isoformat()))
-
-        conn.commit()
-    return {"success": True, "message": "Demo history seeded successfully"}
 
 
 app.include_router(api_router)

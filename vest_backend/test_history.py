@@ -89,16 +89,6 @@ class TestPortfolioHistory(unittest.TestCase):
         data = resp_hist.json()
         self.assertGreaterEqual(data["summary"]["currentTotal"], 25000.0)
 
-    def test_seed_demo_history(self):
-        resp = self.client.post("/api/portfolio/history/seed-demo")
-        self.assertEqual(resp.status_code, 200)
-
-        resp_hist = self.client.get("/api/portfolio/history")
-        self.assertEqual(resp_hist.status_code, 200)
-        data = resp_hist.json()
-        self.assertGreaterEqual(len(data["snapshots"]), 12)
-        self.assertGreaterEqual(len(data["monthlySavings"]), 12)
-
 
 if __name__ == "__main__":
     unittest.main()
