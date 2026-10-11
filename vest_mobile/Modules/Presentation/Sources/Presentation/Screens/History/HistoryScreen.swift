@@ -129,7 +129,7 @@ private struct HeroSavingsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Total Savings")
+            Text("Total Savings Balance")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
 
@@ -148,16 +148,25 @@ private struct HeroSavingsCard: View {
 
                 Spacer()
 
-                GrowthBadge(changeAmount: delta.changeAmount, changePct: delta.changePct)
+                if state.hasMultipleSnapshots && delta.changeAmount != 0 {
+                    GrowthBadge(changeAmount: delta.changeAmount, changePct: delta.changePct)
+                }
             }
 
             HStack(spacing: 6) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
-                Text("\(delta.rangeLabel) • Started at \(Int(delta.startAmount)) PLN")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+
+                if state.hasMultipleSnapshots && delta.startAmount != delta.endAmount {
+                    Text("\(delta.rangeLabel) • Started at \(Int(delta.startAmount)) PLN")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                } else {
+                    Text("Current status quo • 1 snapshot recorded")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
             }
         }
         .padding(20)
@@ -212,7 +221,7 @@ private struct KPISavingsRow: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("Avg: \(Int(state.monthlyAverage)) PLN/mo")
+                Text(state.hasMultipleSnapshots ? "Avg: \(Int(state.monthlyAverage)) PLN/mo" : "Baseline month")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -235,7 +244,7 @@ private struct KPISavingsRow: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("Avg: \(Int(state.yearlyAverage)) PLN/yr")
+                Text(state.hasMultipleSnapshots ? "Avg: \(Int(state.yearlyAverage)) PLN/yr" : "Baseline year")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -300,13 +309,14 @@ private struct TimelineChartCard: View {
                     ForEach(points) { pt in
                         AreaMark(
                             x: .value("Date", pt.date),
-                            y: .value("Value", pt.totalAmount)
+                            yStart: .value("Baseline", yDomain.lowerBound),
+                            yEnd: .value("Value", pt.totalAmount)
                         )
                         .interpolationMethod(.monotone)
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
-                                    VestActionColor.positive.opacity(0.32),
+                                    VestActionColor.positive.opacity(0.28),
                                     VestActionColor.positive.opacity(0.0)
                                 ],
                                 startPoint: .top,
@@ -346,6 +356,9 @@ private struct TimelineChartCard: View {
                     }
                 }
                 .chartYScale(domain: yDomain)
+                .chartPlotStyle { plotArea in
+                    plotArea.clipped()
+                }
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { _ in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
@@ -368,6 +381,7 @@ private struct TimelineChartCard: View {
                     }
                 }
                 .frame(height: 220)
+                .clipped()
                 .chartOverlay { proxy in
                     GeometryReader { geo in
                         Rectangle()
@@ -376,41 +390,28 @@ private struct TimelineChartCard: View {
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
+                                        let plotFrame: CGRect
                                         #if os(macOS)
                                         if #available(macOS 14.0, *) {
-                                            if let frame = proxy.plotFrame {
-                                                let origin = geo[frame].origin
-                                                let location = CGPoint(
-                                                    x: value.location.x - origin.x,
-                                                    y: value.location.y - origin.y
-                                                )
-                                                if let date: Date = proxy.value(atX: location.x) {
-                                                    selectedDate = date
-                                                }
-                                            }
+                                            guard let frame = proxy.plotFrame else { return }
+                                            plotFrame = geo[frame]
                                         } else {
-                                            let frame = proxy.plotAreaFrame
-                                            let origin = geo[frame].origin
-                                            let location = CGPoint(
-                                                x: value.location.x - origin.x,
-                                                y: value.location.y - origin.y
-                                            )
-                                            if let date: Date = proxy.value(atX: location.x) {
-                                                selectedDate = date
-                                            }
+                                            plotFrame = geo[proxy.plotAreaFrame]
                                         }
                                         #else
-                                        if let frame = proxy.plotFrame {
-                                            let origin = geo[frame].origin
-                                            let location = CGPoint(
-                                                x: value.location.x - origin.x,
-                                                y: value.location.y - origin.y
-                                            )
-                                            if let date: Date = proxy.value(atX: location.x) {
-                                                selectedDate = date
-                                            }
-                                        }
+                                        guard let frame = proxy.plotFrame else { return }
+                                        plotFrame = geo[frame]
                                         #endif
+
+                                        guard plotFrame.contains(value.location) else {
+                                            selectedDate = nil
+                                            return
+                                        }
+
+                                        let locationX = value.location.x - plotFrame.origin.x
+                                        if let date: Date = proxy.value(atX: locationX) {
+                                            selectedDate = date
+                                        }
                                     }
                                     .onEnded { _ in
                                         selectedDate = nil
@@ -419,11 +420,21 @@ private struct TimelineChartCard: View {
                     }
                 }
             } else {
-                Text("Not enough historical points yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(height: 180)
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 12) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 32))
+                        .foregroundStyle(VestActionColor.positive.opacity(0.7))
+                    Text("Tracking Started")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Baseline snapshot recorded at \(Int(points.first?.totalAmount ?? state.summary.currentTotal)) PLN. As you upload monthly statements, your historical savings curve will appear here.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
             }
         }
         .padding(20)

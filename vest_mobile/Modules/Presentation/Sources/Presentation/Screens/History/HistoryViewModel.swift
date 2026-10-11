@@ -100,6 +100,10 @@ public struct HistoryState: Equatable, Sendable {
         history.yearlySavings
     }
 
+    public var hasMultipleSnapshots: Bool {
+        snapshots.count >= 2
+    }
+
     public func filteredSnapshots(for range: TimeRange) -> [PortfolioSnapshotPoint] {
         guard !snapshots.isEmpty else { return [] }
         guard range != .all else { return snapshots }
@@ -129,8 +133,8 @@ public struct HistoryState: Equatable, Sendable {
 
         let start = first.totalAmount
         let end = last.totalAmount
-        let change = round((end - start) * 100.0) / 100.0
-        let pct = start > 0 ? (round((change / start * 100.0) * 100.0) / 100.0) : 0.0
+        let change = pts.count > 1 ? (round((end - start) * 100.0) / 100.0) : 0.0
+        let pct = (start > 0 && pts.count > 1) ? (round((change / start * 100.0) * 100.0) / 100.0) : 0.0
 
         return RangeDelta(
             startAmount: start,

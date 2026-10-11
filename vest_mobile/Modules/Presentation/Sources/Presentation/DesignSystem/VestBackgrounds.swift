@@ -21,9 +21,9 @@ struct VestGradientBackground: View {
                 .offset(x: 140, y: -230)
 
             RoundedRectangle(cornerRadius: 80, style: .continuous)
-                .fill(Color(red: 0.90, green: 0.66, blue: 0.44).opacity(0.18))
+                .fill(Color(red: 0.90, green: 0.66, blue: 0.44).opacity(0.08))
                 .frame(width: 240, height: 240)
-                .blur(radius: 30)
+                .blur(radius: 40)
                 .offset(x: -160, y: 260)
         }
     }
@@ -36,7 +36,11 @@ struct VestCardBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.white.opacity(fillOpacity))
+            .fill(Color(red: 0.10, green: 0.12, blue: 0.17).opacity(0.85))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(fillOpacity))
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(Color.white.opacity(strokeOpacity), lineWidth: 1)

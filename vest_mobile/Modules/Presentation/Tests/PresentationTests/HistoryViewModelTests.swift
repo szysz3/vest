@@ -143,4 +143,48 @@ struct HistoryViewModelTests {
         #expect(vm.state.isFailed)
         #expect(vm.state.error?.errorDescription?.contains("Fetch failed") == true)
     }
+
+    @Test func singleSnapshotStatusQuoBehavior() async throws {
+        let singleSnapshot = PortfolioSnapshotPoint(
+            id: "snap_0",
+            date: Date(),
+            dateString: "2026-10-11",
+            totalAmount: 125000.0,
+            nominalAmount: 115000.0,
+            amountSaved: 0.0
+        )
+        let summary = PortfolioHistorySummary(
+            currentTotal: 125000.0,
+            startingTotal: 125000.0,
+            totalSaved: 0.0,
+            totalGrowthPct: 0.0,
+            monthlyAverageSaved: 0.0,
+            yearlyAverageSaved: 0.0,
+            currentMonthSaved: 0.0,
+            currentYearSaved: 0.0
+        )
+        let history = PortfolioHistory(
+            summary: summary,
+            snapshots: [singleSnapshot],
+            monthlySavings: [],
+            yearlySavings: []
+        )
+
+        let stub = StubHistoryUseCase()
+        stub.historyResult = history
+        let vm = HistoryViewModel(getPortfolioHistoryUseCase: stub)
+
+        await vm.load()
+        guard let state = vm.state.data else {
+            Issue.record("Expected loaded state")
+            return
+        }
+
+        #expect(!state.hasMultipleSnapshots)
+        let delta = state.delta(for: .all)
+        #expect(delta.startAmount == 125000.0)
+        #expect(delta.endAmount == 125000.0)
+        #expect(delta.changeAmount == 0.0)
+        #expect(delta.changePct == 0.0)
+    }
 }
