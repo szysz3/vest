@@ -133,20 +133,25 @@ private struct HeroSavingsCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                let currentVal = delta.endAmount
-                let whole = Int(currentVal)
-                let fraction = currentVal - Double(whole)
-                let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
+            HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    let currentVal = delta.endAmount
+                    let whole = Int(currentVal)
+                    let fraction = currentVal - Double(whole)
+                    let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
 
-                Text("\(whole)")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(",\(fractionText) PLN")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.55))
+                    Text("\(whole)")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text(",\(fractionText) PLN")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .layoutPriority(1)
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 if state.hasMultipleSnapshots && delta.changeAmount != 0 {
                     GrowthBadge(changeAmount: delta.changeAmount, changePct: delta.changePct)
@@ -204,7 +209,9 @@ private struct GrowthBadge: View {
                 .font(.system(size: 11, weight: .bold))
             Text("\(prefix)\(Int(changeAmount)) PLN (\(prefix)\(String(format: "%.1f", changePct))%)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .foregroundStyle(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -295,32 +302,36 @@ private struct TimelineChartCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header with interactive callout or title
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
                     Text("Nominal Savings Trajectory")
                         .font(.headline)
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
 
-                    if let active = activePoint {
-                        HStack(spacing: 6) {
-                            Text("\(active.dateString) • Nominal: \(Int(active.nominalAmount)) PLN")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(VestActionColor.positive)
-                            Text("(Actual: \(Int(active.totalAmount)) PLN)")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                    } else {
-                        Text("Nominal value invested vs. actual market value")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    Spacer()
+
+                    // Range picker
+                    TimeRangePicker(selectedRange: $selectedRange)
                 }
 
-                Spacer()
-
-                // Range picker
-                TimeRangePicker(selectedRange: $selectedRange)
+                if let active = activePoint {
+                    HStack(spacing: 6) {
+                        Text("\(active.dateString) • Nominal: \(Int(active.nominalAmount)) PLN")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(VestActionColor.positive)
+                        Text("(Actual: \(Int(active.totalAmount)) PLN)")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                } else {
+                    Text("Nominal value invested vs. actual market value")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
 
             if points.count >= 2 {
