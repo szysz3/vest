@@ -208,6 +208,8 @@ class StatementSyncStatusResponse(BaseModel):
 
 
 class PortfolioHistorySummary(BaseModel):
+    currentNominal: float
+    startingNominal: float
     currentTotal: float
     startingTotal: float
     totalSaved: float
@@ -1128,18 +1130,23 @@ async def get_portfolio_history():
         m = int(d_parts[1])
         key = f"{y:04d}-{m:02d}"
 
-        if s.amountSaved > 0:
-            saved_val = s.amountSaved
-        elif i > 0:
-            saved_val = max(0.0, round(s.nominalAmount - snapshots[i - 1].nominalAmount, 2))
+        if i > 0:
+            net_delta = round(s.nominalAmount - snapshots[i - 1].nominalAmount, 2)
+            saved_val = max(0.0, net_delta)
+            s.amountSaved = saved_val
         else:
-            saved_val = s.amountSaved
+            net_delta = 0.0
+            saved_val = 0.0
+            s.amountSaved = 0.0
 
-        month_map[key] = {
-            "year": y,
-            "month": m,
-            "amount": saved_val,
-        }
+        if key in month_map:
+            month_map[key]["net_delta"] = round(month_map[key]["net_delta"] + net_delta, 2)
+        else:
+            month_map[key] = {
+                "year": y,
+                "month": m,
+                "net_delta": net_delta,
+            }
 
     monthly_savings = []
     for key in sorted(month_map.keys()):
@@ -1154,7 +1161,7 @@ async def get_portfolio_history():
                 month=m,
                 label=f"{m_name} {y}",
                 shortLabel=m_name,
-                amount=round(item["amount"], 2),
+                amount=max(0.0, round(item["net_delta"], 2)),
             )
         )
 
@@ -1174,18 +1181,24 @@ async def get_portfolio_history():
             )
         )
 
+    cur_nom = snapshots[-1].nominalAmount if snapshots else 0.0
+    start_nom = snapshots[0].nominalAmount if snapshots else 0.0
     cur_tot = snapshots[-1].totalAmount if snapshots else 0.0
     start_tot = snapshots[0].totalAmount if snapshots else 0.0
     tot_saved = sum(m.amount for m in monthly_savings)
-    growth_pct = round(((cur_tot - start_tot) / start_tot * 100.0), 2) if (start_tot > 0 and len(snapshots) > 1) else 0.0
+    growth_pct = round(((cur_nom - start_nom) / start_nom * 100.0), 2) if (start_nom > 0 and len(snapshots) > 1) else 0.0
 
-    monthly_avg = round(tot_saved / len(monthly_savings), 2) if monthly_savings else 0.0
-    yearly_avg = round(tot_saved / len(yearly_savings), 2) if yearly_savings else 0.0
+    active_months = monthly_savings[1:] if (len(monthly_savings) > 1 and monthly_savings[0].amount == 0) else monthly_savings
+    active_years = yearly_savings[1:] if (len(yearly_savings) > 1 and yearly_savings[0].amount == 0) else yearly_savings
+    monthly_avg = round(tot_saved / len(active_months), 2) if active_months else 0.0
+    yearly_avg = round(tot_saved / len(active_years), 2) if active_years else 0.0
     cur_month_saved = monthly_savings[-1].amount if monthly_savings else 0.0
     rolling_12_months = monthly_savings[-12:] if monthly_savings else []
     cur_year_saved = round(sum(m.amount for m in rolling_12_months), 2)
 
     summary = PortfolioHistorySummary(
+        currentNominal=cur_nom,
+        startingNominal=start_nom,
         currentTotal=cur_tot,
         startingTotal=start_tot,
         totalSaved=round(tot_saved, 2),

@@ -103,6 +103,8 @@ private struct PortfolioHistoryRemoteResponse: Decodable {
 }
 
 private struct PortfolioHistorySummaryRemoteResponse: Decodable {
+    let currentNominal: Double?
+    let startingNominal: Double?
     let currentTotal: Double
     let startingTotal: Double
     let totalSaved: Double
@@ -114,6 +116,8 @@ private struct PortfolioHistorySummaryRemoteResponse: Decodable {
 
     func toDomain() -> PortfolioHistorySummary {
         PortfolioHistorySummary(
+            currentNominal: currentNominal ?? currentTotal,
+            startingNominal: startingNominal ?? startingTotal,
             currentTotal: currentTotal,
             startingTotal: startingTotal,
             totalSaved: totalSaved,

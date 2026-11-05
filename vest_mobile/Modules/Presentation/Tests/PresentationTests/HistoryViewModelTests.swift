@@ -58,10 +58,12 @@ struct HistoryViewModelTests {
         ]
 
         let summary = PortfolioHistorySummary(
+            currentNominal: 144500.0,
+            startingNominal: 95000.0,
             currentTotal: 155000.0,
             startingTotal: 100000.0,
-            totalSaved: 54000.0,
-            totalGrowthPct: 55.0,
+            totalSaved: 49500.0,
+            totalGrowthPct: 52.11,
             monthlyAverageSaved: 4500.0,
             yearlyAverageSaved: 54000.0,
             currentMonthSaved: 4500.0,
@@ -127,10 +129,13 @@ struct HistoryViewModelTests {
         #expect(!sixMonthPoints.isEmpty)
 
         let deltaAll = state.delta(for: .all)
-        #expect(deltaAll.startAmount == 100000.0)
-        #expect(deltaAll.endAmount == 155000.0)
-        #expect(deltaAll.changeAmount == 55000.0)
-        #expect(deltaAll.changePct == 55.0)
+        #expect(deltaAll.startAmount == 95000.0)
+        #expect(deltaAll.endAmount == 144500.0)
+        #expect(deltaAll.changeAmount == 49500.0)
+        #expect(deltaAll.changePct == 52.11)
+        #expect(deltaAll.actualStartAmount == 100000.0)
+        #expect(deltaAll.actualEndAmount == 155000.0)
+        #expect(deltaAll.marketProfitAmount == 10500.0)
     }
 
     @Test func loadFailureSetsFailedState() async throws {
@@ -154,6 +159,8 @@ struct HistoryViewModelTests {
             amountSaved: 0.0
         )
         let summary = PortfolioHistorySummary(
+            currentNominal: 115000.0,
+            startingNominal: 115000.0,
             currentTotal: 125000.0,
             startingTotal: 125000.0,
             totalSaved: 0.0,
@@ -182,9 +189,11 @@ struct HistoryViewModelTests {
 
         #expect(!state.hasMultipleSnapshots)
         let delta = state.delta(for: .all)
-        #expect(delta.startAmount == 125000.0)
-        #expect(delta.endAmount == 125000.0)
+        #expect(delta.startAmount == 115000.0)
+        #expect(delta.endAmount == 115000.0)
         #expect(delta.changeAmount == 0.0)
         #expect(delta.changePct == 0.0)
+        #expect(delta.actualEndAmount == 125000.0)
+        #expect(delta.marketProfitAmount == 10000.0)
     }
 }

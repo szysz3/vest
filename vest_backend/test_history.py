@@ -33,6 +33,8 @@ class TestPortfolioHistory(unittest.TestCase):
 
         # Check summary keys
         summary = data["summary"]
+        self.assertIn("currentNominal", summary)
+        self.assertIn("startingNominal", summary)
         self.assertIn("currentTotal", summary)
         self.assertIn("startingTotal", summary)
         self.assertIn("totalSaved", summary)
@@ -87,6 +89,7 @@ class TestPortfolioHistory(unittest.TestCase):
         resp_hist = self.client.get("/api/portfolio/history")
         self.assertEqual(resp_hist.status_code, 200)
         data = resp_hist.json()
+        self.assertGreaterEqual(data["summary"]["currentNominal"], 25000.0)
         self.assertGreaterEqual(data["summary"]["currentTotal"], 25000.0)
 
 

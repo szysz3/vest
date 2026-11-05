@@ -128,8 +128,8 @@ private struct HeroSavingsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Total Savings Balance")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nominal Savings Invested")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
 
@@ -153,17 +153,32 @@ private struct HeroSavingsCard: View {
                 }
             }
 
+            // Secondary / additional info: Actual market value
+            HStack(spacing: 6) {
+                Text("Actual value: \(Int(delta.actualEndAmount)) PLN")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.7))
+
+                if delta.marketProfitAmount != 0 {
+                    let isPos = delta.marketProfitAmount >= 0
+                    let prefix = isPos ? "+" : ""
+                    Text("(\(prefix)\(Int(delta.marketProfitAmount)) PLN / \(prefix)\(String(format: "%.1f", delta.marketProfitPct))% market)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(isPos ? VestActionColor.positive.opacity(0.85) : VestActionColor.negative.opacity(0.85))
+                }
+            }
+
             HStack(spacing: 6) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
 
                 if state.hasMultipleSnapshots && delta.startAmount != delta.endAmount {
-                    Text("\(delta.rangeLabel) • Started at \(Int(delta.startAmount)) PLN")
+                    Text("\(delta.rangeLabel) • Baseline started at \(Int(delta.startAmount)) PLN")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 } else {
-                    Text("Current status quo • 1 snapshot recorded")
+                    Text("Current nominal baseline • 1 snapshot recorded")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -221,7 +236,7 @@ private struct KPISavingsRow: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text(state.hasMultipleSnapshots ? "Avg: \(Int(state.monthlyAverage)) PLN/mo" : "Baseline month")
+                Text(state.hasMultipleSnapshots ? "Avg: \(Int(state.monthlyAverage)) PLN/mo (nominal)" : "Baseline month (nominal)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -244,7 +259,7 @@ private struct KPISavingsRow: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text(state.hasMultipleSnapshots ? "Past 12 months" : "Baseline year")
+                Text(state.hasMultipleSnapshots ? "Past 12 months (nominal)" : "Baseline year (nominal)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -271,10 +286,10 @@ private struct TimelineChartCard: View {
     }
 
     private var yDomain: ClosedRange<Double> {
-        let values = points.map(\.totalAmount)
+        let values = points.flatMap { [$0.nominalAmount, $0.totalAmount] }
         let minVal = (values.min() ?? 0) * 0.95
         let maxVal = (values.max() ?? 1000) * 1.05
-        return minVal...maxVal
+        return minVal...max(maxVal, minVal + 1)
     }
 
     var body: some View {
@@ -282,16 +297,21 @@ private struct TimelineChartCard: View {
             // Header with interactive callout or title
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Savings Trajectory")
+                    Text("Nominal Savings Trajectory")
                         .font(.headline)
                         .foregroundStyle(.white)
 
                     if let active = activePoint {
-                        Text("\(active.dateString) • \(Int(active.totalAmount)) PLN")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(VestActionColor.positive)
+                        HStack(spacing: 6) {
+                            Text("\(active.dateString) • Nominal: \(Int(active.nominalAmount)) PLN")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(VestActionColor.positive)
+                            Text("(Actual: \(Int(active.totalAmount)) PLN)")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
                     } else {
-                        Text("Historical portfolio value over time")
+                        Text("Nominal value invested vs. actual market value")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.55))
                     }
@@ -303,14 +323,37 @@ private struct TimelineChartCard: View {
                 TimeRangePicker(selectedRange: $selectedRange)
             }
 
+            if points.count >= 2 {
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        Capsule()
+                            .fill(VestActionColor.positive)
+                            .frame(width: 14, height: 3)
+                        Text("Nominal (Baseline)")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    HStack(spacing: 6) {
+                        HStack(spacing: 2) {
+                            Capsule().fill(Color.white.opacity(0.5)).frame(width: 5, height: 2)
+                            Capsule().fill(Color.white.opacity(0.5)).frame(width: 5, height: 2)
+                        }
+                        Text("Actual (Market)")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
+            }
+
             // Swift Charts Line & Area
             if points.count >= 2 {
                 Chart {
                     ForEach(points) { pt in
+                        // Baseline: Nominal Value Invested
                         AreaMark(
                             x: .value("Date", pt.date),
                             yStart: .value("Baseline", yDomain.lowerBound),
-                            yEnd: .value("Value", pt.totalAmount)
+                            yEnd: .value("Nominal", pt.nominalAmount)
                         )
                         .interpolationMethod(.monotone)
                         .foregroundStyle(
@@ -326,11 +369,22 @@ private struct TimelineChartCard: View {
 
                         LineMark(
                             x: .value("Date", pt.date),
-                            y: .value("Value", pt.totalAmount)
+                            y: .value("Nominal", pt.nominalAmount),
+                            series: .value("Series", "Nominal")
                         )
                         .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                         .foregroundStyle(VestActionColor.positive)
+
+                        // Additional Info: Actual Market Value (dashed secondary line)
+                        LineMark(
+                            x: .value("Date", pt.date),
+                            y: .value("Actual", pt.totalAmount),
+                            series: .value("Series", "Actual")
+                        )
+                        .interpolationMethod(.monotone)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 4]))
+                        .foregroundStyle(Color.white.opacity(0.4))
                     }
 
                     if let active = activePoint {
@@ -340,18 +394,23 @@ private struct TimelineChartCard: View {
 
                         PointMark(
                             x: .value("Date", active.date),
-                            y: .value("Value", active.totalAmount)
+                            y: .value("Nominal", active.nominalAmount)
                         )
                         .symbolSize(80)
                         .foregroundStyle(VestActionColor.positive)
                         .annotation(position: .top, spacing: 8) {
-                            Text("\(Int(active.totalAmount)) PLN")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color.black.opacity(0.75)))
-                                .overlay(Capsule().stroke(VestActionColor.positive.opacity(0.4), lineWidth: 1))
+                            VStack(spacing: 2) {
+                                Text("Nominal: \(Int(active.nominalAmount)) PLN")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white)
+                                Text("Actual: \(Int(active.totalAmount)) PLN")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.65))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.black.opacity(0.78)))
+                            .overlay(Capsule().stroke(VestActionColor.positive.opacity(0.4), lineWidth: 1))
                         }
                     }
                 }
@@ -427,7 +486,7 @@ private struct TimelineChartCard: View {
                     Text("Tracking Started")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Baseline snapshot recorded at \(Int(points.first?.totalAmount ?? state.summary.currentTotal)) PLN. As you upload monthly statements, your historical savings curve will appear here.")
+                    Text("Baseline snapshot recorded at \(Int(points.first?.nominalAmount ?? state.summary.currentNominal)) PLN nominal (Actual: \(Int(points.first?.totalAmount ?? state.summary.currentTotal)) PLN). As you upload monthly statements, your nominal savings curve will appear here.")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                         .multilineTextAlignment(.center)
@@ -485,7 +544,7 @@ private struct ContributionsChartCard: View {
                     Text("Savings Contributions")
                         .font(.headline)
                         .foregroundStyle(.white)
-                    Text("Net savings added per period")
+                    Text("Net nominal value invested per period")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -685,16 +744,21 @@ private struct HistoryLogRow: View {
                     Text(point.dateString)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Saved: +\(Int(point.amountSaved)) PLN")
+                    Text("Nominal saved: +\(Int(point.amountSaved)) PLN")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(point.amountSaved > 0 ? VestActionColor.positive.opacity(0.85) : .white.opacity(0.5))
                 }
 
                 Spacer()
 
-                Text("\(Int(point.totalAmount)) PLN")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(Int(point.nominalAmount)) PLN")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text("Actual: \(Int(point.totalAmount)) PLN")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.45))
+                }
             }
             .padding(.vertical, 6)
 

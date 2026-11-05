@@ -1,6 +1,8 @@
 import Foundation
 
 public struct PortfolioHistorySummary: Equatable, Sendable, Codable {
+    public let currentNominal: Double
+    public let startingNominal: Double
     public let currentTotal: Double
     public let startingTotal: Double
     public let totalSaved: Double
@@ -11,6 +13,8 @@ public struct PortfolioHistorySummary: Equatable, Sendable, Codable {
     public let currentYearSaved: Double
 
     public init(
+        currentNominal: Double? = nil,
+        startingNominal: Double? = nil,
         currentTotal: Double,
         startingTotal: Double,
         totalSaved: Double,
@@ -20,6 +24,8 @@ public struct PortfolioHistorySummary: Equatable, Sendable, Codable {
         currentMonthSaved: Double,
         currentYearSaved: Double
     ) {
+        self.currentNominal = currentNominal ?? currentTotal
+        self.startingNominal = startingNominal ?? startingTotal
         self.currentTotal = currentTotal
         self.startingTotal = startingTotal
         self.totalSaved = totalSaved
