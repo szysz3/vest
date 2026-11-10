@@ -130,8 +130,9 @@ apt-get install -y -qq rsync gzip sqlite3
 # ── 3. Deploy application ───────────────────────────────────────────────────
 log "Deploying application to ${DEPLOY_DIR}..."
 mkdir -p "${DEPLOY_DIR}"
-rm -rf "${DEPLOY_DIR}/parsers" "${DEPLOY_DIR}/templates"
+rm -rf "${DEPLOY_DIR}/parsers" "${DEPLOY_DIR}/templates" "${DEPLOY_DIR}/static"
 cp "${SCRIPT_DIR}/app.py"             "${DEPLOY_DIR}/"
+cp "${SCRIPT_DIR}/bond_planner.py"    "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/requirements.txt"   "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/Dockerfile"         "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/docker-compose.yml" "${DEPLOY_DIR}/"
@@ -141,13 +142,14 @@ cp "${SCRIPT_DIR}/.env"               "${DEPLOY_DIR}/"
 cp "${SCRIPT_DIR}/config.json"        "${DEPLOY_DIR}/"
 cp -r "${SCRIPT_DIR}/parsers"         "${DEPLOY_DIR}/"
 cp -r "${SCRIPT_DIR}/templates"       "${DEPLOY_DIR}/"
+cp -r "${SCRIPT_DIR}/static"          "${DEPLOY_DIR}/"
 
 chmod +x "${DEPLOY_DIR}/backup.sh"
 chown "${CRON_USER}":"${CRON_USER}" "${DEPLOY_DIR}/.env"
 chmod 600 "${DEPLOY_DIR}/.env"
 
 log "Verifying deployment files..."
-for f in app.py requirements.txt Dockerfile docker-compose.yml .dockerignore backup.sh .env config.json parsers templates; do
+for f in app.py bond_planner.py requirements.txt Dockerfile docker-compose.yml .dockerignore backup.sh .env config.json parsers templates static; do
     [[ -e "${DEPLOY_DIR}/${f}" ]] || err "Missing ${DEPLOY_DIR}/${f} — copy failed."
 done
 log "All files deployed to ${DEPLOY_DIR}:"

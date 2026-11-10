@@ -12,7 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY parsers/ ./parsers/
 COPY templates/ ./templates/
+COPY static/ ./static/
 COPY config.json .
+COPY bond_planner.py .
 COPY app.py .
 
 EXPOSE 8000
