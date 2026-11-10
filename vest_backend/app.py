@@ -16,6 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from parsers import BondsParser, EquitiesParser
+from bond_planner import (
+    BondPlannerResponse,
+    BondPlannerSettingsModel,
+    calculate_bond_planner,
+)
 
 DB_PATH = Path(os.environ.get("DB_PATH", Path(__file__).parent / "vest.db"))
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", Path(__file__).parent / "config.json"))
@@ -384,6 +389,19 @@ def init_db():
                 amount_saved_pln REAL NOT NULL DEFAULT 0.0,
                 breakdown_json TEXT DEFAULT '{}',
                 created_at TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bond_planner_settings (
+                id TEXT PRIMARY KEY,
+                target_monthly_nominal REAL NOT NULL DEFAULT 3000.0,
+                horizon_years INTEGER NOT NULL DEFAULT 5,
+                investment_budget REAL NOT NULL DEFAULT 10000.0,
+                include_family_bonds INTEGER NOT NULL DEFAULT 0,
+                custom_inflation_rate REAL DEFAULT NULL,
+                custom_nbp_rate REAL DEFAULT NULL,
+                updated_at TEXT NOT NULL
             )
         """)
 
@@ -1224,6 +1242,103 @@ async def force_portfolio_snapshot(date: Optional[str] = None):
         record_portfolio_snapshot(conn, snapshot_date=date)
         conn.commit()
     return {"success": True, "message": "Snapshot recorded successfully"}
+
+
+def get_saved_bond_planner_settings(conn) -> BondPlannerSettingsModel:
+    row = conn.execute("SELECT * FROM bond_planner_settings WHERE id = 'default'").fetchone()
+    if not row:
+        return BondPlannerSettingsModel()
+    return BondPlannerSettingsModel(
+        targetMonthlyNominal=float(row["target_monthly_nominal"]),
+        horizonYears=int(row["horizon_years"]),
+        investmentBudget=float(row["investment_budget"]),
+        includeFamilyBonds=bool(row["include_family_bonds"]),
+        customInflationRatePct=float(row["custom_inflation_rate"]) if row["custom_inflation_rate"] is not None else None,
+        customNbpRatePct=float(row["custom_nbp_rate"]) if row["custom_nbp_rate"] is not None else None,
+    )
+
+
+@app.get("/bonds/planner", response_model=BondPlannerResponse)
+@api_router.get("/bonds/planner", response_model=BondPlannerResponse)
+async def get_bonds_planner(
+    target_monthly: Optional[float] = None,
+    horizon_years: Optional[int] = None,
+    budget: Optional[float] = None,
+    include_family_bonds: Optional[bool] = None,
+    inflation_rate: Optional[float] = None,
+    nbp_rate: Optional[float] = None,
+    reference_month: Optional[int] = None,
+):
+    with get_db() as conn:
+        settings = get_saved_bond_planner_settings(conn)
+        if target_monthly is not None:
+            settings.targetMonthlyNominal = max(0.0, target_monthly)
+        if horizon_years is not None:
+            settings.horizonYears = max(1, min(12, horizon_years))
+        if budget is not None:
+            settings.investmentBudget = max(0.0, budget)
+        if include_family_bonds is not None:
+            settings.includeFamilyBonds = include_family_bonds
+        if inflation_rate is not None:
+            settings.customInflationRatePct = inflation_rate
+        if nbp_rate is not None:
+            settings.customNbpRatePct = nbp_rate
+
+        rows = conn.execute("""
+            SELECT h.details,
+                   SUM(h.nominal_amount_pln) as nominal_amount_pln,
+                   SUM(h.amount_pln) as amount_pln
+            FROM parsed_holdings h
+            JOIN statement_uploads u ON h.upload_id = u.id
+            WHERE u.status = 'active' AND LOWER(h.asset_type) IN ('bond', 'bonds')
+            GROUP BY h.details
+        """).fetchall()
+
+    holdings_list = [dict(r) for r in rows]
+    return calculate_bond_planner(
+        holdings_rows=holdings_list,
+        settings=settings,
+        reference_month=reference_month,
+    )
+
+
+@app.put("/bonds/planner/settings", response_model=BondPlannerSettingsModel)
+@api_router.put("/bonds/planner/settings", response_model=BondPlannerSettingsModel)
+async def update_bonds_planner_settings(payload: BondPlannerSettingsModel):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    target_val = max(0.0, round(payload.targetMonthlyNominal, 2))
+    horizon_val = max(1, min(12, payload.horizonYears))
+    budget_val = max(0.0, round(payload.investmentBudget, 2))
+    fam_val = 1 if payload.includeFamilyBonds else 0
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO bond_planner_settings (
+                id, target_monthly_nominal, horizon_years, investment_budget,
+                include_family_bonds, custom_inflation_rate, custom_nbp_rate, updated_at
+            ) VALUES ('default', ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                target_monthly_nominal = excluded.target_monthly_nominal,
+                horizon_years = excluded.horizon_years,
+                investment_budget = excluded.investment_budget,
+                include_family_bonds = excluded.include_family_bonds,
+                custom_inflation_rate = excluded.custom_inflation_rate,
+                custom_nbp_rate = excluded.custom_nbp_rate,
+                updated_at = excluded.updated_at
+            """,
+            (
+                target_val,
+                horizon_val,
+                budget_val,
+                fam_val,
+                payload.customInflationRatePct,
+                payload.customNbpRatePct,
+                now_iso,
+            ),
+        )
+        conn.commit()
+        return get_saved_bond_planner_settings(conn)
 
 
 app.include_router(api_router)

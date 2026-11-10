@@ -25,5 +25,10 @@ public extension Container {
         self { FixedAssetRepositoryImpl(httpClient: HTTPClient()) }
             .singleton
     }
+
+    var bondPlannerRepository: Factory<BondPlannerRepository> {
+        self { BondPlannerRepositoryImpl(httpClient: HTTPClient()) }
+            .singleton
+    }
 }
 

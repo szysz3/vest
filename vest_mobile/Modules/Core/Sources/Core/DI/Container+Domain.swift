@@ -61,5 +61,17 @@ public extension Container {
             DeleteFixedAssetUseCase(repository: self.fixedAssetRepository())
         }
     }
+
+    var getBondPlannerUseCase: Factory<GetBondPlannerUseCaseProtocol> {
+        self {
+            GetBondPlannerUseCase(repository: self.bondPlannerRepository())
+        }
+    }
+
+    var updateBondPlannerSettingsUseCase: Factory<UpdateBondPlannerSettingsUseCaseProtocol> {
+        self {
+            UpdateBondPlannerSettingsUseCase(repository: self.bondPlannerRepository())
+        }
+    }
 }
 

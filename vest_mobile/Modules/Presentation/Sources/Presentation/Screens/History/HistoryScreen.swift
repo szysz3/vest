@@ -128,35 +128,25 @@ private struct HeroSavingsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Nominal Savings Invested")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
 
-            HStack(alignment: .center, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    let currentVal = delta.endAmount
-                    let whole = Int(currentVal)
-                    let fraction = currentVal - Double(whole)
-                    let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                let currentVal = delta.endAmount
+                let whole = Int(currentVal)
+                let fraction = currentVal - Double(whole)
+                let fractionText = String(format: "%02d", Int((fraction * 100).rounded()))
 
-                    Text("\(whole)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(",\(fractionText) PLN")
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .layoutPriority(1)
-
-                Spacer(minLength: 4)
-
-                if state.hasMultipleSnapshots && delta.changeAmount != 0 {
-                    GrowthBadge(changeAmount: delta.changeAmount, changePct: delta.changePct)
-                }
+                Text("\(whole)")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(",\(fractionText) PLN")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
             }
+            .lineLimit(1)
 
             // Secondary / additional info: Actual market value
             HStack(spacing: 6) {
@@ -172,53 +162,10 @@ private struct HeroSavingsCard: View {
                         .foregroundStyle(isPos ? VestActionColor.positive.opacity(0.85) : VestActionColor.negative.opacity(0.85))
                 }
             }
-
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
-
-                if state.hasMultipleSnapshots && delta.startAmount != delta.endAmount {
-                    Text("\(delta.rangeLabel) • Baseline started at \(Int(delta.startAmount)) PLN")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
-                } else {
-                    Text("Current nominal baseline • 1 snapshot recorded")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(VestCardBackground())
-    }
-}
-
-private struct GrowthBadge: View {
-    let changeAmount: Double
-    let changePct: Double
-
-    var body: some View {
-        let isPositive = changeAmount >= 0
-        let color = isPositive ? VestActionColor.positive : VestActionColor.negative
-        let prefix = isPositive ? "+" : ""
-
-        HStack(spacing: 4) {
-            Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
-                .font(.system(size: 11, weight: .bold))
-            Text("\(prefix)\(Int(changeAmount)) PLN (\(prefix)\(String(format: "%.1f", changePct))%)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .lineLimit(1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.16))
-        )
     }
 }
 

@@ -5,11 +5,13 @@ public struct NavigationTabContainer: View {
     @State private var selectedTab: Tab = .portfolio
     private let portfolioViewModel: PortfolioViewModel
     private let detailsViewModel: DetailsViewModel
+    private let bondPlannerViewModel: BondPlannerViewModel
     private let historyViewModel: HistoryViewModel
 
     public init() {
         self.portfolioViewModel = Container.shared.portfolioViewModel()
         self.detailsViewModel = Container.shared.detailsViewModel()
+        self.bondPlannerViewModel = Container.shared.bondPlannerViewModel()
         self.historyViewModel = Container.shared.historyViewModel()
     }
 
@@ -38,6 +40,17 @@ public struct NavigationTabContainer: View {
             .tag(Tab.details)
 
             NavigationStack {
+                BondPlannerScreen(viewModel: bondPlannerViewModel)
+                    .navigationTitle(Tab.bonds.title)
+                    .preferredColorScheme(.dark)
+                    #if os(iOS)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
+                    #endif
+            }
+            .tabItem { Label(Tab.bonds.title, systemImage: Tab.bonds.icon) }
+            .tag(Tab.bonds)
+
+            NavigationStack {
                 HistoryScreen(viewModel: historyViewModel)
                     .navigationTitle(Tab.history.title)
                     .preferredColorScheme(.dark)
@@ -58,12 +71,14 @@ extension NavigationTabContainer {
     enum Tab: Int {
         case portfolio
         case details
+        case bonds
         case history
 
         var title: String {
             switch self {
             case .portfolio: "Portfolio"
             case .details: "Details"
+            case .bonds: "Ladder"
             case .history: "History"
             }
         }
@@ -72,6 +87,7 @@ extension NavigationTabContainer {
             switch self {
             case .portfolio: "chart.pie.fill"
             case .details: "square.stack.3d.up"
+            case .bonds: "calendar.badge.clock"
             case .history: "chart.line.uptrend.xyaxis"
             }
         }

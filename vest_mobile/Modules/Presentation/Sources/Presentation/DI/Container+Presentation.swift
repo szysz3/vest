@@ -28,6 +28,15 @@ public extension Container {
         }
     }
 
+    var bondPlannerViewModel: Factory<BondPlannerViewModel> {
+        self {
+            BondPlannerViewModel(
+                getBondPlannerUseCase: self.getBondPlannerUseCase(),
+                updateBondPlannerSettingsUseCase: self.updateBondPlannerSettingsUseCase()
+            )
+        }
+    }
+
     var lockViewModel: Factory<LockViewModel> {
         self { LockViewModel(authenticateWithBiometricsUseCase: self.authenticateWithBiometricsUseCase()) }
     }
