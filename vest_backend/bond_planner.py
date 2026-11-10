@@ -334,18 +334,82 @@ def fetch_live_nbp_reference_rate() -> float:
 
 
 def fetch_live_poland_cpi_inflation() -> float:
-    url = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_manr?geo=PL&coicop=CP00&lastTimePeriod=1"
-    req = urllib.request.Request(url, headers={"User-Agent": "VestBackend/1.0", "Accept": "application/json"})
+    """
+    Fetches live Polish GUS CPI YoY inflation ('wskaźnik cen towarów i usług konsumpcyjnych r/r'):
+    1. Official GUS (stat.gov.pl) latest CPI signal announcement ('Informacja sygnalna').
+    2. Bankier.pl macroeconomic GUS CPI YoY indicator ('Inflacja r/r (Polska)').
+    3. Official GUS monthly CPI table ('Analogiczny miesiąc poprzedniego roku = 100').
+    """
+    headers = {"User-Agent": "Mozilla/5.0 (VestBackend/1.0)"}
+
+    # 1. Primary: Official GUS (stat.gov.pl) latest CPI announcement
     try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            values = data.get("value", {})
-            if values:
-                first_val = float(list(values.values())[-1])
-                return round(first_val, 2)
+        index_url = "https://stat.gov.pl/obszary-tematyczne/ceny-handel/wskazniki-cen/"
+        req = urllib.request.Request(index_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        links = re.findall(
+            r'href=["\'](https?://stat\.gov\.pl/obszary-tematyczne/ceny-handel/wskazniki-cen/[^"\']*towarow-i-uslug-konsumpcyjnych[^"\']*\.html)["\']',
+            html,
+        )
+        if links:
+            ann_url = links[0]
+            req_ann = urllib.request.Request(ann_url, headers=headers)
+            with urllib.request.urlopen(req_ann, timeout=5) as resp_ann:
+                ann_html = resp_ann.read().decode("utf-8", errors="ignore")
+            ann_text = re.sub(r"<[^>]+>", " ", ann_html)
+            ann_text = re.sub(r"\s+", " ", ann_text)
+            # Match e.g. "Ceny towarów i usług konsumpcyjnych ... wzrosły o 3,5% (wskaźnik cen 103,5) w porównaniu z analogicznym miesiącem ub. roku"
+            m = re.search(
+                r"[Cc]eny towar[óo]w i us[łl]ug konsumpcyjnych[^\.]{0,220}?\(\s*wska[źz]nik cen\s+(\d+[,\.]\d+)\s*\)\s*w por[óo]wnaniu z analogicznym miesi[ąa]cem",
+                ann_text,
+            )
+            if m:
+                idx_val = float(m.group(1).replace(",", "."))
+                return round(idx_val - 100.0, 2)
+            m_pct = re.search(
+                r"[Cc]eny towar[óo]w i us[łl]ug konsumpcyjnych[^\.]{0,180}?wzros[łl]y o\s+(\d+[,\.]\d+)\s*%\s*[^\.]{0,80}?analogicznym miesi[ąa]cem",
+                ann_text,
+            )
+            if m_pct:
+                return round(float(m_pct.group(1).replace(",", ".")), 2)
     except Exception as e:
-        print(f"Warning: Failed to fetch Eurostat CPI inflation: {e}")
-    return 2.50
+        print(f"Warning: Failed to fetch GUS CPI announcement: {e}")
+
+    # 2. Secondary: Bankier.pl GUS CPI YoY ('Inflacja r/r (Polska)')
+    try:
+        bankier_url = "https://www.bankier.pl/gospodarka/wskazniki-makroekonomiczne/inflacja-rdr-pol"
+        req_b = urllib.request.Request(bankier_url, headers=headers)
+        with urllib.request.urlopen(req_b, timeout=5) as resp_b:
+            b_html = resp_b.read().decode("utf-8", errors="ignore")
+        b_text = re.sub(r"<[^>]+>", " ", b_html)
+        b_text = re.sub(r"\s+", " ", b_text)
+        m_b = re.search(r"Inflacja r/r\s*\(Polska\)\s*(-?\d+[,\.]\d+)\s*%", b_text)
+        if m_b:
+            return round(float(m_b.group(1).replace(",", ".")), 2)
+    except Exception as e:
+        print(f"Warning: Failed to fetch Bankier CPI inflation: {e}")
+
+    # 3. Tertiary: Official GUS monthly table ('Analogiczny miesiąc poprzedniego roku = 100')
+    try:
+        table_url = "https://stat.gov.pl/obszary-tematyczne/ceny-handel/wskazniki-cen/wskazniki-cen-towarow-i-uslug-konsumpcyjnych-pot-inflacja-/miesieczne-wskazniki-cen-towarow-i-uslug-konsumpcyjnych-od-1982-roku/"
+        req_t = urllib.request.Request(table_url, headers=headers)
+        with urllib.request.urlopen(req_t, timeout=5) as resp_t:
+            t_html = resp_t.read().decode("utf-8", errors="ignore")
+        t_text = re.sub(r"<[^>]+>", " ", t_html)
+        t_text = re.sub(r"\s+", " ", t_text)
+        idx = t_text.find("Analogiczny miesiąc poprzedniego roku = 100")
+        if idx != -1:
+            row_m = re.search(r"20\d{2}\s+((?:\d{2,3}[,\.]\d+\s*)+)", t_text[idx : idx + 400])
+            if row_m:
+                nums = re.findall(r"\d{2,3}[,\.]\d+", row_m.group(1))
+                if nums:
+                    latest_idx = float(nums[-1].replace(",", "."))
+                    return round(latest_idx - 100.0, 2)
+    except Exception as e:
+        print(f"Warning: Failed to fetch GUS CPI table: {e}")
+
+    return 3.50
 
 
 def scrape_obligacje_skarbowe_specs() -> Tuple[Dict[str, dict], str]:

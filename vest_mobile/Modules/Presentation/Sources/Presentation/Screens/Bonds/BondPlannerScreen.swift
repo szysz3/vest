@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 import Core
 import Domain
 
@@ -107,50 +106,34 @@ private struct BondPlannerContent: View {
                 .opacity(appeared ? 1 : 0)
                 .offset(y: appeared ? 0 : 12)
 
-                // 2. Consolidated Purchase Recommendations ("What to Buy Now")
-                PurchaseRecommendationCard(
-                    data: data,
-                    onOpenSettings: onOpenSettings
-                )
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 16)
-
-                // 3. Stacked Bar Chart: Target Month Continuity Across Upcoming Years
-                ContinuityChartCard(
-                    data: data,
-                    selectedYear: $selectedContinuityYear
-                )
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 20)
-
-                // 4. Year-by-Year Continuity & Best Bond Comparison
+                // 2. Year-by-Year Continuity & Best Bond Comparison
                 YearlySlotsComparisonCard(
                     data: data,
                     selectedYear: $selectedContinuityYear
                 )
                 .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 24)
+                .offset(y: appeared ? 0 : 16)
 
-                // 5. 12-Month x Multi-Year Continuity Heatmap Grid
+                // 3. 12-Month x Multi-Year Continuity Heatmap Grid
                 MaturityHeatmapCard(
                     data: data,
                     selectedCellId: $selectedCalendarCellId
                 )
                 .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 28)
+                .offset(y: appeared ? 0 : 20)
 
-                // 6. Early Termination ("Przedterminowy Wykup") Advisor
+                // 4. Early Termination ("Przedterminowy Wykup") Advisor (Collapsed by default)
                 EarlyRedemptionAdvisorCard(
                     recommendations: data.earlyRedemptionRecommendations,
                     targetMonthlyNominal: data.settings.targetMonthlyNominal
                 )
                 .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 32)
+                .offset(y: appeared ? 0 : 24)
 
-                // 7. Current "List Emisyjny" Reference Table
+                // 5. Current "List Emisyjny" Reference Table (Collapsed by default)
                 ListEmisyjnyCard(market: data.market)
                     .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 36)
+                    .offset(y: appeared ? 0 : 28)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -360,308 +343,7 @@ private struct MacroBadge: View {
     }
 }
 
-// MARK: - 2. Consolidated Purchase Recommendation Card
-private struct PurchaseRecommendationCard: View {
-    let data: BondPlannerData
-    var onOpenSettings: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(VestActionColor.positive)
-                        Text("RECOMMENDED TO BUY (\(data.market.issueMonthLabel))")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(VestActionColor.positive)
-                    }
-                    Text("Best Bonds from List Emisyjny")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Est. Net Profit")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Text("+\(Int(data.summary.projectedTotalNetProfitFromBudgetPLN)) PLN")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(VestActionColor.positive)
-                }
-            }
-
-            // Continuity vs Surplus Budget Breakdown Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Min Continuity Needed")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Text("\(Int(data.summary.totalRequiredForContinuityPLN)) PLN")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                }
-                Divider().frame(height: 24).overlay(Color.white.opacity(0.1))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Allocated to Continuity")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Text("\(Int(data.summary.budgetAllocatedToContinuityPLN)) PLN")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(VestTone.electric.color)
-                }
-                if data.summary.budgetAllocatedToSurplusPLN > 0 {
-                    Divider().frame(height: 24).overlay(Color.white.opacity(0.1))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Surplus Invested")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.55))
-                        Text("+\(Int(data.summary.budgetAllocatedToSurplusPLN)) PLN")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(VestTone.amber.color)
-                    }
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-            )
-
-            if data.purchaseRecommendations.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.title3)
-                        .foregroundStyle(VestActionColor.positive)
-                    Text(data.settings.investmentBudget < 100
-                         ? "Set an investment budget (>= 100 PLN) in Edit Plan to generate bond purchase recommendations."
-                         : "All target months in this horizon are already 100% covered!")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .padding(.vertical, 6)
-            } else {
-                ForEach(data.purchaseRecommendations) { rec in
-                    PurchaseRecommendationRow(rec: rec)
-                }
-            }
-
-            if data.summary.unfundedContinuityGapPLN > 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(VestTone.amber.color)
-                    Text("Remaining continuity gap across \(data.settings.horizonYears) years: \(Int(data.summary.unfundedContinuityGapPLN)) PLN (increase budget or use early redemption below).")
-                        .font(.caption2)
-                        .foregroundStyle(VestTone.amber.color.opacity(0.95))
-                }
-                .padding(.top, 2)
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(VestCardBackground())
-    }
-}
-
-private struct PurchaseRecommendationRow: View {
-    let rec: BondPurchaseRecommendation
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(rec.bondCode)
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.white)
-                        Text("\(rec.totalUnits) bonds")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(VestTone.rose.color.opacity(0.25)))
-                            .foregroundStyle(VestTone.rose.color)
-                    }
-                    Text("\(rec.bondName) • 1st yr \(String(format: "%.2f%%", rec.firstYearRatePct))")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(Int(rec.totalNominalPLN)) PLN")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                    Text("+\(Int(rec.projectedTotalNetProfitPLN)) PLN net (\(String(format: "%.2f%%", rec.effectiveAnnualRatePct))/yr)")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(VestActionColor.positive)
-                }
-            }
-
-            // Allocation pills showing which target dates this purchase covers
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(rec.allocations) { alloc in
-                        HStack(spacing: 4) {
-                            Image(systemName: alloc.isSurplus ? "plus.circle.fill" : (alloc.isEarlyRedemption ? "scissors" : "calendar.badge.checkmark"))
-                                .font(.system(size: 9, weight: .bold))
-                            if alloc.isSurplus {
-                                Text("Surplus: \(Int(alloc.nominalPLN)) PLN (hold \(alloc.holdingYears)y to \(alloc.targetLabel))")
-                            } else if alloc.isEarlyRedemption {
-                                Text("For \(alloc.targetLabel): \(Int(alloc.nominalPLN)) PLN (early exit after \(alloc.holdingYears)y)")
-                            } else {
-                                Text("For \(alloc.targetLabel): \(Int(alloc.nominalPLN)) PLN (maturity)")
-                            }
-                        }
-                        .font(.system(size: 10, weight: .semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill(
-                                alloc.isSurplus
-                                    ? VestTone.amber.color.opacity(0.2)
-                                    : (alloc.isEarlyRedemption ? VestTone.violet.color.opacity(0.22) : VestTone.electric.color.opacity(0.2))
-                            )
-                        )
-                        .foregroundStyle(
-                            alloc.isSurplus
-                                ? VestTone.amber.color
-                                : (alloc.isEarlyRedemption ? VestTone.violet.color : VestTone.electric.color)
-                        )
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - 3. Continuity Stacked Bar Chart (Swift Charts)
-private struct ContinuityChartCard: View {
-    let data: BondPlannerData
-    @Binding var selectedYear: Int?
-
-    private struct StackedBarItem: Identifiable {
-        let id: String
-        let yearLabel: String
-        let year: Int
-        let category: String
-        let amount: Double
-    }
-
-    private var chartItems: [StackedBarItem] {
-        data.yearlyContinuitySlots.flatMap { slot in
-            [
-                StackedBarItem(id: "\(slot.id)_existing", yearLabel: slot.label, year: slot.year, category: "Existing", amount: slot.existingNominalPLN),
-                StackedBarItem(id: "\(slot.id)_proposed", yearLabel: slot.label, year: slot.year, category: "Recommended Buy", amount: slot.allocatedNewNominalPLN),
-                StackedBarItem(id: "\(slot.id)_gap", yearLabel: slot.label, year: slot.year, category: "Unfunded Gap", amount: slot.unfundedGapNominalPLN)
-            ]
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Month \(String(format: "%02d", data.market.issueMonth)) Continuity Across Upcoming Years")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text("Existing nominal holdings vs. recommended new purchases & target cash flow")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-
-            // Legend
-            HStack(spacing: 14) {
-                LegendDot(color: VestActionColor.positive, label: "Existing")
-                LegendDot(color: VestTone.electric.color, label: "Recommended Buy")
-                LegendDot(color: VestTone.amber.color.opacity(0.5), label: "Unfunded Gap")
-            }
-
-            Chart {
-                ForEach(chartItems) { item in
-                    BarMark(
-                        x: .value("Maturity", item.yearLabel),
-                        y: .value("Nominal PLN", item.amount)
-                    )
-                    .foregroundStyle(by: .value("Category", item.category))
-                    .cornerRadius(4)
-                }
-
-                if data.settings.targetMonthlyNominal > 0 {
-                    RuleMark(y: .value("Target", data.settings.targetMonthlyNominal))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                        .foregroundStyle(VestTone.rose.color)
-                        .annotation(position: .top, alignment: .trailing) {
-                            Text("Target \(Int(data.settings.targetMonthlyNominal)) PLN")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(VestTone.rose.color)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.black.opacity(0.75)))
-                        }
-                }
-            }
-            .chartForegroundStyleScale([
-                "Existing": VestActionColor.positive,
-                "Recommended Buy": VestTone.electric.color,
-                "Unfunded Gap": VestTone.amber.color.opacity(0.35)
-            ])
-            .chartLegend(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                        .foregroundStyle(Color.white.opacity(0.08))
-                    if let val = value.as(Double.self) {
-                        AxisValueLabel {
-                            Text(val >= 1000 ? String(format: "%.1fk", val / 1000.0) : "\(Int(val))")
-                                .font(.caption2)
-                                .foregroundStyle(Color.white.opacity(0.55))
-                        }
-                    }
-                }
-            }
-            .chartXAxis {
-                AxisMarks { _ in
-                    AxisValueLabel()
-                        .foregroundStyle(Color.white.opacity(0.75))
-                }
-            }
-            .frame(height: 200)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(VestCardBackground())
-    }
-}
-
-private struct LegendDot: View {
-    let color: Color
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
-        }
-    }
-}
-
-// MARK: - 4. Year-by-Year Continuity & Bond Yield Comparison
+// MARK: - 2. Year-by-Year Continuity & Bond Yield Comparison
 private struct YearlySlotsComparisonCard: View {
     let data: BondPlannerData
     @Binding var selectedYear: Int?
@@ -786,17 +468,151 @@ private struct YearlySlotsComparisonCard: View {
     }
 }
 
-// MARK: - 5. 12-Month x Multi-Year Maturity Heatmap Grid
+// MARK: - 3. 12-Month x Multi-Year Maturity Heatmap Grid (Carry-On Model, Δ Display)
+private struct CarryTransfer: Identifiable {
+    var id: String { "\(monthLabel)_\(Int(amountPLN))" }
+    let monthLabel: String
+    let amountPLN: Double
+}
+
+private struct EffectiveMatrixCell: Identifiable {
+    let base: MonthlyMaturityCell
+    let carryInNominalPLN: Double
+    let carryInSources: [CarryTransfer]
+    let carryOutNominalPLN: Double
+    let carryOutTargets: [CarryTransfer]
+    let unabsorbedSurplusNominalPLN: Double
+
+    var id: String { base.id }
+
+    var directNominalPLN: Double {
+        base.existingNominalPLN + base.proposedNominalPLN
+    }
+
+    /// Total nominal covering this month's target (direct up to target + carried-in from earlier surplus + any unabsorbed excess)
+    var effectiveNominalPLN: Double {
+        if directNominalPLN >= base.targetNominalPLN {
+            return base.targetNominalPLN + unabsorbedSurplusNominalPLN
+        } else {
+            return directNominalPLN + carryInNominalPLN
+        }
+    }
+
+    var effectiveCoverageRatio: Double {
+        guard base.targetNominalPLN > 0 else {
+            return effectiveNominalPLN > 0 ? 1.0 : 0.0
+        }
+        return effectiveNominalPLN / base.targetNominalPLN
+    }
+
+    var effectiveCoveragePct: Double {
+        effectiveCoverageRatio * 100.0
+    }
+
+    var effectiveShortfallPLN: Double {
+        max(0.0, base.targetNominalPLN - effectiveNominalPLN)
+    }
+
+    var isCovered: Bool {
+        base.targetNominalPLN > 0 && effectiveNominalPLN >= base.targetNominalPLN - 0.5
+    }
+}
+
+private struct EffectiveYearlyRow: Identifiable {
+    let id: String
+    let year: Int
+    let cells: [EffectiveMatrixCell]
+
+    var coveredMonthsCount: Int {
+        cells.filter(\.isCovered).count
+    }
+}
+
 private struct MaturityHeatmapCard: View {
     let data: BondPlannerData
     @Binding var selectedCellId: String?
 
     private let monthHeaders = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"]
 
-    private var selectedCell: MonthlyMaturityCell? {
+    /// Computes chronological surplus spillover across months so e.g. 30k in Jan (with 10k target) covers Jan (10k), Feb (10k), and Mar (10k).
+    private var effectiveRows: [EffectiveYearlyRow] {
+        let allBaseCells = data.maturityCalendar.flatMap(\.months)
+        guard !allBaseCells.isEmpty else { return [] }
+
+        struct SurplusBucket {
+            let cellIndex: Int
+            let label: String
+            var remainingPLN: Double
+        }
+
+        var buckets: [SurplusBucket] = []
+        var carryInByIdx: [Int: [CarryTransfer]] = [:]
+        var carryOutByIdx: [Int: [CarryTransfer]] = [:]
+        var initialSurplusByIdx: [Int: Double] = [:]
+
+        for (idx, cell) in allBaseCells.enumerated() {
+            let direct = cell.existingNominalPLN + cell.proposedNominalPLN
+            let target = cell.targetNominalPLN
+
+            if direct > target + 0.01 {
+                let excess = direct - target
+                initialSurplusByIdx[idx] = excess
+                buckets.append(SurplusBucket(cellIndex: idx, label: cell.label, remainingPLN: excess))
+            } else if direct + 0.01 < target {
+                var needed = target - direct
+                var bIdx = 0
+                while needed > 0.01 && bIdx < buckets.count {
+                    let avail = buckets[bIdx].remainingPLN
+                    if avail > 0.01 {
+                        let used = min(avail, needed)
+                        buckets[bIdx].remainingPLN -= used
+                        needed -= used
+
+                        let srcIdx = buckets[bIdx].cellIndex
+                        carryInByIdx[idx, default: []].append(
+                            CarryTransfer(monthLabel: buckets[bIdx].label, amountPLN: used)
+                        )
+                        carryOutByIdx[srcIdx, default: []].append(
+                            CarryTransfer(monthLabel: cell.label, amountPLN: used)
+                        )
+                    }
+                    bIdx += 1
+                }
+            }
+        }
+
+        var flatEffective: [String: EffectiveMatrixCell] = [:]
+        for (idx, cell) in allBaseCells.enumerated() {
+            let inTransfers = carryInByIdx[idx] ?? []
+            let outTransfers = carryOutByIdx[idx] ?? []
+            let totalIn = inTransfers.reduce(0.0) { $0 + $1.amountPLN }
+            let totalOut = outTransfers.reduce(0.0) { $0 + $1.amountPLN }
+            let initExcess = initialSurplusByIdx[idx] ?? 0.0
+            let unabsorbed = max(0.0, initExcess - totalOut)
+
+            flatEffective[cell.id] = EffectiveMatrixCell(
+                base: cell,
+                carryInNominalPLN: totalIn,
+                carryInSources: inTransfers,
+                carryOutNominalPLN: totalOut,
+                carryOutTargets: outTransfers,
+                unabsorbedSurplusNominalPLN: unabsorbed
+            )
+        }
+
+        return data.maturityCalendar.map { row in
+            EffectiveYearlyRow(
+                id: row.id,
+                year: row.year,
+                cells: row.months.compactMap { flatEffective[$0.id] }
+            )
+        }
+    }
+
+    private var selectedEffectiveCell: EffectiveMatrixCell? {
         guard let id = selectedCellId else { return nil }
-        for row in data.maturityCalendar {
-            if let found = row.months.first(where: { $0.id == id }) {
+        for row in effectiveRows {
+            if let found = row.cells.first(where: { $0.id == id }) {
                 return found
             }
         }
@@ -804,22 +620,19 @@ private struct MaturityHeatmapCard: View {
     }
 
     var body: some View {
+        let rows = effectiveRows
+
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("12-Month × Multi-Year Continuity Matrix")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text("Month-by-month bond maturity coverage across all 12 calendar months. Tap any month cell for details.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
+            Text("12-Month × Multi-Year Continuity Matrix")
+                .font(.headline)
+                .foregroundStyle(.white)
 
             // Month header row
             HStack(spacing: 4) {
                 Text("Year")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white.opacity(0.5))
-                    .frame(width: 38, alignment: .leading)
+                    .frame(width: 44, alignment: .leading)
 
                 ForEach(0..<12, id: \.self) { mIdx in
                     Text(monthHeaders[mIdx])
@@ -833,32 +646,33 @@ private struct MaturityHeatmapCard: View {
                 }
             }
 
-            ForEach(data.maturityCalendar) { row in
+            ForEach(rows) { row in
                 HStack(spacing: 4) {
-                    Text(String(row.year))
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .frame(width: 38, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(String(row.year))
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text("\(row.coveredMonthsCount)/12")
+                            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                row.coveredMonthsCount == 12
+                                    ? VestActionColor.positive
+                                    : (row.coveredMonthsCount > 0 ? VestTone.ocean.color : .white.opacity(0.35))
+                            )
+                    }
+                    .frame(width: 44, alignment: .leading)
 
-                    ForEach(row.months) { cell in
-                        let isSelected = cell.id == selectedCellId
+                    ForEach(row.cells) { eCell in
+                        let isSelected = eCell.id == selectedCellId
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) {
-                                selectedCellId = isSelected ? nil : cell.id
+                                selectedCellId = isSelected ? nil : eCell.id
                             }
                         } label: {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(cellColor(for: cell))
-                                .frame(height: 24)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .stroke(
-                                            isSelected
-                                                ? Color.white
-                                                : (cell.isCurrentIssueMonth ? VestTone.electric.color.opacity(0.6) : Color.clear),
-                                            lineWidth: isSelected ? 1.5 : 1
-                                        )
-                                )
+                            MatrixCellView(
+                                effectiveCell: eCell,
+                                isSelected: isSelected
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -866,135 +680,478 @@ private struct MaturityHeatmapCard: View {
             }
 
             // Selected Cell Callout
-            if let cell = selectedCell {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Maturity Month: \(cell.label)")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text("\(Int(cell.coveragePct))% of \(Int(cell.targetNominalPLN)) PLN target")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(cell.coveragePct >= 100 ? VestActionColor.positive : VestTone.amber.color)
-                    }
-
-                    Text("Held Nominal: \(Int(cell.existingNominalPLN)) PLN • Proposed Buy: \(Int(cell.proposedNominalPLN)) PLN • Shortfall: \(Int(cell.shortfallNominalPLN)) PLN")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.7))
-
-                    if !cell.heldBonds.isEmpty {
-                        HStack(spacing: 6) {
-                            ForEach(cell.heldBonds) { hb in
-                                Text("\(hb.code): \(Int(hb.nominalPLN)) PLN")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(Capsule().fill(VestActionColor.positive.opacity(0.2)))
-                                    .foregroundStyle(VestActionColor.positive)
-                            }
-                        }
-                    } else {
-                        Text("No bonds currently held with native maturity in \(cell.label).")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                )
+            if let eCell = selectedEffectiveCell {
+                SelectedMatrixCellDetailView(effectiveCell: eCell)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(VestCardBackground())
     }
+}
 
-    private func cellColor(for cell: MonthlyMaturityCell) -> Color {
-        if cell.existingNominalPLN >= cell.targetNominalPLN && cell.targetNominalPLN > 0 {
-            return VestActionColor.positive.opacity(0.85)
+private struct MatrixCellView: View {
+    let effectiveCell: EffectiveMatrixCell
+    let isSelected: Bool
+
+    private var cell: MonthlyMaturityCell { effectiveCell.base }
+
+    private var target: Double {
+        max(cell.targetNominalPLN, 1.0)
+    }
+
+    private var directNominal: Double {
+        effectiveCell.directNominalPLN
+    }
+
+    private var carryInNominal: Double {
+        effectiveCell.carryInNominalPLN
+    }
+
+    private var effectiveNominal: Double {
+        effectiveCell.effectiveNominalPLN
+    }
+
+    private var existingRatio: Double {
+        guard cell.targetNominalPLN > 0 else { return directNominal > 0 ? 1.0 : 0.0 }
+        return min(cell.existingNominalPLN, target) / target
+    }
+
+    private var directRatio: Double {
+        guard cell.targetNominalPLN > 0 else { return directNominal > 0 ? 1.0 : 0.0 }
+        return min(directNominal, target) / target
+    }
+
+    private var effectiveRatio: Double {
+        effectiveCell.effectiveCoverageRatio
+    }
+
+    /// Only true when there is still unabsorbed excess beyond target after carrying forward to later months
+    private var isUnabsorbedExceeded: Bool {
+        cell.targetNominalPLN > 0 && effectiveCell.unabsorbedSurplusNominalPLN > 0.5
+    }
+
+    private var isExactOrCarryCovered: Bool {
+        cell.targetNominalPLN > 0 && abs(effectiveNominal - cell.targetNominalPLN) <= 0.5
+    }
+
+    private var hasCarryIn: Bool {
+        carryInNominal > 0.5
+    }
+
+    private var hasCarryOut: Bool {
+        effectiveCell.carryOutNominalPLN > 0.5
+    }
+
+    private var primaryColor: Color {
+        if effectiveNominal <= 0 {
+            return Color.clear
         }
-        if (cell.existingNominalPLN + cell.proposedNominalPLN) >= cell.targetNominalPLN && cell.targetNominalPLN > 0 {
-            return VestTone.electric.color.opacity(0.8)
+        if isUnabsorbedExceeded {
+            return VestTone.rose.color
         }
-        if cell.existingNominalPLN > 0 || cell.proposedNominalPLN > 0 {
-            return VestTone.amber.color.opacity(0.75)
+        if isExactOrCarryCovered {
+            if hasCarryIn && directNominal < cell.targetNominalPLN - 0.5 {
+                return VestTone.ocean.color
+            }
+            if cell.proposedNominalPLN > 0 && cell.existingNominalPLN < cell.targetNominalPLN - 0.5 {
+                return VestTone.electric.color
+            }
+            return VestActionColor.positive
         }
-        return Color.white.opacity(0.07)
+        // Graduated color between 1% and 99% (including partial carry-over!)
+        let pct = effectiveRatio * 100.0
+        if pct < 40.0 {
+            return VestTone.sunset.color
+        } else if pct < 75.0 {
+            return VestTone.amber.color
+        } else {
+            return VestTone.sage.color
+        }
+    }
+
+    private var cellLabelText: String {
+        guard effectiveNominal > 0 || directNominal > 0 else { return "—" }
+        let diff = effectiveNominal - cell.targetNominalPLN
+        if abs(diff) <= 0.5 {
+            return hasCarryIn ? "↳✓" : (hasCarryOut ? "✓→" : "✓")
+        } else if diff > 0 {
+            return "+\(compactPLN(diff))"
+        } else {
+            return "-\(compactPLN(abs(diff)))"
+        }
+    }
+
+    private func compactPLN(_ value: Double) -> String {
+        if value >= 1000 {
+            let k = value / 1000.0
+            return k.truncatingRemainder(dividingBy: 1) == 0
+                ? String(format: "%.0fk", k)
+                : String(format: "%.1fk", k)
+        }
+        return "\(Int(round(value)))"
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let height = geo.size.height
+            let clampedExistingFill = CGFloat(min(max(existingRatio, 0.0), 1.0)) * height
+            let clampedDirectFill = CGFloat(min(max(directRatio, 0.0), 1.0)) * height
+            let clampedEffectiveFill = CGFloat(min(max(effectiveRatio, 0.0), 1.0)) * height
+
+            ZStack(alignment: .bottom) {
+                // Empty cell track
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+
+                if effectiveNominal > 0 {
+                    // 1. Total effective fill (including carry-in spillover from earlier months)
+                    if hasCarryIn {
+                        Rectangle()
+                            .fill(
+                                (isExactOrCarryCovered ? VestTone.ocean.color : primaryColor)
+                                    .opacity(0.75)
+                            )
+                            .frame(height: clampedEffectiveFill)
+                    }
+
+                    // 2. Direct proposed + existing fill
+                    if directNominal > 0 {
+                        if cell.proposedNominalPLN > 0 && !isUnabsorbedExceeded {
+                            Rectangle()
+                                .fill(VestTone.electric.color.opacity(0.72))
+                                .frame(height: clampedDirectFill)
+                            if cell.existingNominalPLN > 0 {
+                                Rectangle()
+                                    .fill(primaryColor.opacity(0.88))
+                                    .frame(height: clampedExistingFill)
+                            }
+                        } else {
+                            Rectangle()
+                                .fill(primaryColor.opacity(isUnabsorbedExceeded ? 0.85 : 0.82))
+                                .frame(height: hasCarryIn ? clampedDirectFill : clampedEffectiveFill)
+                        }
+                    }
+                }
+
+                // Top accent cap: white/rose when unabsorbed exceeded, or ocean cyan when feeding subsequent months
+                if isUnabsorbedExceeded {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.75))
+                            .frame(height: 2.5)
+                        Spacer(minLength: 0)
+                    }
+                } else if hasCarryOut {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(VestTone.ocean.color)
+                            .frame(height: 2.5)
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                // Centered text label showing closeness / carry-over
+                Text(cellLabelText)
+                    .font(.system(size: 8.0, weight: .bold, design: .rounded))
+                    .foregroundStyle(effectiveNominal > 0 ? Color.white : Color.white.opacity(0.22))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .shadow(color: .black.opacity(0.55), radius: 1, x: 0, y: 0.5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? Color.white
+                            : (isUnabsorbedExceeded
+                                ? VestTone.rose.color
+                                : (hasCarryIn
+                                    ? VestTone.ocean.color.opacity(0.65)
+                                    : (cell.isCurrentIssueMonth ? VestTone.electric.color.opacity(0.65) : Color.white.opacity(0.06)))),
+                        lineWidth: isSelected ? 1.6 : (isUnabsorbedExceeded || cell.isCurrentIssueMonth ? 1.1 : 0.6)
+                    )
+            )
+        }
+        .frame(height: 30)
     }
 }
 
-// MARK: - 6. Early Termination ("Przedterminowy Wykup") Advisor Card
+private struct SelectedMatrixCellDetailView: View {
+    let effectiveCell: EffectiveMatrixCell
+
+    private var cell: MonthlyMaturityCell { effectiveCell.base }
+
+    private var directNominal: Double {
+        effectiveCell.directNominalPLN
+    }
+
+    private var effectiveNominal: Double {
+        effectiveCell.effectiveNominalPLN
+    }
+
+    private var isUnabsorbedExceeded: Bool {
+        cell.targetNominalPLN > 0 && effectiveCell.unabsorbedSurplusNominalPLN > 0.5
+    }
+
+    private var isExactOrCarryCovered: Bool {
+        cell.targetNominalPLN > 0 && abs(effectiveNominal - cell.targetNominalPLN) <= 0.5
+    }
+
+    private var statusTitle: String {
+        if isUnabsorbedExceeded {
+            return "Exceeded (+\(Int(round(effectiveCell.unabsorbedSurplusNominalPLN))) PLN unused)"
+        } else if isExactOrCarryCovered {
+            if effectiveCell.carryInNominalPLN > 0.5 && directNominal < cell.targetNominalPLN - 0.5 {
+                return "Covered via Carry-Over (100%)"
+            } else if effectiveCell.carryOutNominalPLN > 0.5 {
+                return "On Target + Covers +\(effectiveCell.carryOutTargets.count) mo"
+            }
+            return "On Target (100%)"
+        } else if effectiveNominal > 0 {
+            return "Shortfall (-\(Int(round(effectiveCell.effectiveShortfallPLN))) PLN • \(Int(round(effectiveCell.effectiveCoveragePct)))%)"
+        } else {
+            return "Uncovered (0% — needs \(Int(round(cell.targetNominalPLN))) PLN)"
+        }
+    }
+
+    private var statusColor: Color {
+        if isUnabsorbedExceeded {
+            return VestTone.rose.color
+        } else if isExactOrCarryCovered {
+            return effectiveCell.carryInNominalPLN > 0.5 && directNominal < cell.targetNominalPLN - 0.5
+                ? VestTone.ocean.color
+                : VestActionColor.positive
+        } else if effectiveCell.effectiveCoveragePct >= 75 {
+            return VestTone.sage.color
+        } else if effectiveCell.effectiveCoveragePct >= 40 {
+            return VestTone.amber.color
+        } else {
+            return VestTone.sunset.color
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Maturity Month: \(cell.label)")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(statusTitle)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(statusColor)
+            }
+
+            // Visual gauge bar showing Held + Proposed + Carry-In vs 100% Target marker
+            GeometryReader { geo in
+                let maxScale = max(cell.targetNominalPLN * 1.4, directNominal, effectiveNominal, 1.0)
+                let targetX = CGFloat(cell.targetNominalPLN / maxScale) * geo.size.width
+                let existingW = CGFloat(cell.existingNominalPLN / maxScale) * geo.size.width
+                let proposedW = CGFloat(cell.proposedNominalPLN / maxScale) * geo.size.width
+                let carryInW = CGFloat(effectiveCell.carryInNominalPLN / maxScale) * geo.size.width
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(height: 8)
+
+                    HStack(spacing: 0) {
+                        if existingW > 0 {
+                            Rectangle()
+                                .fill(isUnabsorbedExceeded ? VestTone.rose.color : VestActionColor.positive)
+                                .frame(width: existingW, height: 8)
+                        }
+                        if proposedW > 0 {
+                            Rectangle()
+                                .fill(VestTone.electric.color)
+                                .frame(width: proposedW, height: 8)
+                        }
+                        if carryInW > 0 {
+                            Rectangle()
+                                .fill(VestTone.ocean.color)
+                                .frame(width: carryInW, height: 8)
+                        }
+                    }
+                    .clipShape(Capsule())
+
+                    // Target 100% marker line
+                    if cell.targetNominalPLN > 0 {
+                        Rectangle()
+                            .fill(Color.white)
+                            .frame(width: 2, height: 14)
+                            .offset(x: min(max(targetX - 1, 0), geo.size.width - 2))
+                    }
+                }
+            }
+            .frame(height: 14)
+
+            HStack {
+                Text("Direct Held: \(Int(cell.existingNominalPLN)) PLN • Buy: \(Int(cell.proposedNominalPLN)) PLN • Carry-In: \(Int(effectiveCell.carryInNominalPLN)) PLN")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                if effectiveCell.effectiveShortfallPLN > 0 {
+                    Text("Missing: \(Int(effectiveCell.effectiveShortfallPLN)) PLN")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(statusColor)
+                }
+            }
+
+            // Carry-In / Carry-Out breakdown pills
+            if !effectiveCell.carryInSources.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(effectiveCell.carryInSources) { src in
+                            Text("↳ +\(Int(src.amountPLN)) PLN carried from \(src.monthLabel)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(VestTone.ocean.color.opacity(0.22)))
+                                .foregroundStyle(VestTone.ocean.color)
+                        }
+                    }
+                }
+            }
+
+            if !effectiveCell.carryOutTargets.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(effectiveCell.carryOutTargets) { dst in
+                            Text("→ \(Int(dst.amountPLN)) PLN covers \(dst.monthLabel)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(VestTone.ocean.color.opacity(0.22)))
+                                .foregroundStyle(VestTone.ocean.color)
+                        }
+                    }
+                }
+            }
+
+            if !cell.heldBonds.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(cell.heldBonds) { hb in
+                            Text("\(hb.code): \(Int(hb.nominalPLN)) PLN")
+                                .font(.system(size: 10, weight: .semibold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(VestActionColor.positive.opacity(0.2)))
+                                .foregroundStyle(VestActionColor.positive)
+                        }
+                    }
+                }
+            } else if effectiveCell.carryInNominalPLN <= 0 {
+                Text("No bonds maturing in \(cell.label) and no surplus carried over from earlier months.")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+}
+
+// MARK: - 4. Early Termination ("Przedterminowy Wykup") Advisor Card (Collapsed by default)
 private struct EarlyRedemptionAdvisorCard: View {
     let recommendations: [EarlyRedemptionRecommendation]
     let targetMonthlyNominal: Double
 
+    @State private var isExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.uturn.backward.circle.fill")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(VestTone.violet.color)
-                        Text("PRZEDTERMINOWY WYKUP ADVISOR")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(VestTone.violet.color)
-                    }
-                    Text("Which Held Bonds to Early Terminate")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
-                Spacer()
-            }
-
-            Text("If an upcoming month has a cash flow gap, these existing longer-term bonds in your portfolio can be early-redeemed with minimal penalty:")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
-
-            if recommendations.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(VestActionColor.positive)
-                    Text("No early redemptions needed for your current target months, or no surplus long-term bonds available to reallocate.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                .padding(.vertical, 4)
-            } else {
-                ForEach(recommendations.prefix(6)) { rec in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            HStack(spacing: 6) {
-                                Text("For \(rec.targetLabel)")
-                                    .font(.caption.weight(.bold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Capsule().fill(VestTone.violet.color.opacity(0.25)))
-                                    .foregroundStyle(VestTone.violet.color)
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.4))
-                                Text("Redeem \(rec.recommendedRedeemUnits)× \(rec.sourceBondCode)")
-                                    .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(.white)
-                            }
-                            Spacer()
-                            Text("\(Int(rec.recommendedRedeemNominalPLN)) PLN")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(VestActionColor.positive)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.uturn.backward.circle.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(VestTone.violet.color)
+                            Text("PRZEDTERMINOWY WYKUP ADVISOR")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(VestTone.violet.color)
                         }
-
-                        Text("\(rec.reason) • Total est. fee: \(String(format: "%.2f", rec.estimatedFeePLN)) PLN")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.6))
+                        Text("Which Held Bonds to Early Terminate")
+                            .font(.headline)
+                            .foregroundStyle(.white)
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
-                    )
+                    Spacer()
+                    if !recommendations.isEmpty {
+                        Text("\(recommendations.count)")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(VestTone.violet.color.opacity(0.25)))
+                            .foregroundStyle(VestTone.violet.color)
+                    }
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                Divider().overlay(Color.white.opacity(0.08))
+
+                Text("If an upcoming month has a cash flow gap, these existing longer-term bonds in your portfolio can be early-redeemed with minimal penalty:")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+
+                if recommendations.isEmpty {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(VestActionColor.positive)
+                        Text("No early redemptions needed for your current target months, or no surplus long-term bonds available to reallocate.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    ForEach(recommendations.prefix(6)) { rec in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                HStack(spacing: 6) {
+                                    Text("For \(rec.targetLabel)")
+                                        .font(.caption.weight(.bold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Capsule().fill(VestTone.violet.color.opacity(0.25)))
+                                        .foregroundStyle(VestTone.violet.color)
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    Text("Redeem \(rec.recommendedRedeemUnits)× \(rec.sourceBondCode)")
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.white)
+                                }
+                                Spacer()
+                                Text("\(Int(rec.recommendedRedeemNominalPLN)) PLN")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(VestActionColor.positive)
+                            }
+
+                            Text("\(rec.reason) • Total est. fee: \(String(format: "%.2f", rec.estimatedFeePLN)) PLN")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                        )
+                    }
                 }
             }
         }
@@ -1004,64 +1161,80 @@ private struct EarlyRedemptionAdvisorCard: View {
     }
 }
 
-// MARK: - 7. Current "List Emisyjny" Reference Card
+// MARK: - 5. Current "List Emisyjny" Reference Card (Collapsed by default)
 private struct ListEmisyjnyCard: View {
     let market: BondMarketConditions
 
+    @State private var isExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Active Offer (List Emisyjny \(market.issueMonthLabel))")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Text("Live terms scraped from obligacjeskarbowe.pl")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.55))
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
-                Spacer()
-            }
-
-            ForEach(market.availableSeries) { s in
+            } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(s.code)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                            if s.isFamilyBond {
-                                Text("800+")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(VestTone.amber.color.opacity(0.25)))
-                                    .foregroundStyle(VestTone.amber.color)
-                            }
-                        }
-                        Text(s.name)
-                            .font(.caption2)
+                        Text("Active Offer (List Emisyjny \(market.issueMonthLabel))")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Text("Live terms scraped from obligacjeskarbowe.pl")
+                            .font(.caption)
                             .foregroundStyle(.white.opacity(0.55))
                     }
-
                     Spacer()
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("1st yr: \(String(format: "%.2f%%", s.firstYearRatePct))")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(VestActionColor.positive)
-                        let ruleText = s.indexation == "cpi"
-                            ? "CPI + \(String(format: "%.2f%%", s.marginPct)) • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł"
-                            : (s.indexation == "nbp"
-                                ? "NBP + \(String(format: "%.2f%%", s.marginPct)) • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł"
-                                : "Fixed • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł")
-                        Text(ruleText)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
-                .padding(.vertical, 4)
-                if s.id != market.availableSeries.last?.id {
-                    Divider().overlay(Color.white.opacity(0.06))
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                Divider().overlay(Color.white.opacity(0.08))
+
+                ForEach(market.availableSeries) { s in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(s.code)
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(.white)
+                                if s.isFamilyBond {
+                                    Text("800+")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(VestTone.amber.color.opacity(0.25)))
+                                        .foregroundStyle(VestTone.amber.color)
+                                }
+                            }
+                            Text(s.name)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("1st yr: \(String(format: "%.2f%%", s.firstYearRatePct))")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(VestActionColor.positive)
+                            let ruleText = s.indexation == "cpi"
+                                ? "CPI + \(String(format: "%.2f%%", s.marginPct)) • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł"
+                                : (s.indexation == "nbp"
+                                    ? "NBP + \(String(format: "%.2f%%", s.marginPct)) • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł"
+                                    : "Fixed • Fee \(String(format: "%.2f", s.earlyRedemptionFeePLN)) zł")
+                            Text(ruleText)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    if s.id != market.availableSeries.last?.id {
+                        Divider().overlay(Color.white.opacity(0.06))
+                    }
                 }
             }
         }
