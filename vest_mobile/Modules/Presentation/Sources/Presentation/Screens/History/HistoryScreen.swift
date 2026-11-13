@@ -239,10 +239,21 @@ private struct TimelineChartCard: View {
         return points.min(by: { abs($0.date.timeIntervalSince(sel)) < abs($1.date.timeIntervalSince(sel)) })
     }
 
+    private var xDomain: ClosedRange<Date> {
+        guard let first = points.first?.date, let last = points.last?.date, first <= last else {
+            let now = Date()
+            return now...now
+        }
+        return first...last
+    }
+
     private var yDomain: ClosedRange<Double> {
         let values = points.flatMap { [$0.nominalAmount, $0.totalAmount] }
-        let minVal = (values.min() ?? 0) * 0.95
-        let maxVal = (values.max() ?? 1000) * 1.05
+        let rawMin = values.min() ?? 0
+        let rawMax = values.max() ?? 1000
+        let minVal = rawMin * 0.95
+        let baseSpan = max(rawMax - minVal, rawMax * 0.1, 1)
+        let maxVal = max(rawMax * 1.05, rawMax + baseSpan * 0.25)
         return minVal...max(maxVal, minVal + 1)
     }
 
@@ -346,7 +357,7 @@ private struct TimelineChartCard: View {
                     }
 
                     if let active = activePoint {
-                        RuleMark(x: .value("Selected Date", active.date))
+                        RuleMark(x: .value("Date", active.date))
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
                             .foregroundStyle(Color.white.opacity(0.6))
 
@@ -356,7 +367,11 @@ private struct TimelineChartCard: View {
                         )
                         .symbolSize(80)
                         .foregroundStyle(VestActionColor.positive)
-                        .annotation(position: .top, spacing: 8) {
+                        .annotation(
+                            position: .top,
+                            spacing: 8,
+                            overflowResolution: .init(x: .fit(to: .plot), y: .disabled)
+                        ) {
                             VStack(spacing: 2) {
                                 Text("Nominal: \(Int(active.nominalAmount)) PLN")
                                     .font(.caption2.weight(.bold))
@@ -372,10 +387,8 @@ private struct TimelineChartCard: View {
                         }
                     }
                 }
+                .chartXScale(domain: xDomain)
                 .chartYScale(domain: yDomain)
-                .chartPlotStyle { plotArea in
-                    plotArea.clipped()
-                }
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { _ in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
@@ -398,7 +411,6 @@ private struct TimelineChartCard: View {
                     }
                 }
                 .frame(height: 220)
-                .clipped()
                 .chartOverlay { proxy in
                     GeometryReader { geo in
                         Rectangle()
@@ -420,12 +432,9 @@ private struct TimelineChartCard: View {
                                         plotFrame = geo[frame]
                                         #endif
 
-                                        guard plotFrame.contains(value.location) else {
-                                            selectedDate = nil
-                                            return
-                                        }
+                                        guard plotFrame.width > 0 else { return }
 
-                                        let locationX = value.location.x - plotFrame.origin.x
+                                        let locationX = min(max(value.location.x - plotFrame.origin.x, 0), plotFrame.width)
                                         if let date: Date = proxy.value(atX: locationX) {
                                             selectedDate = date
                                         }
